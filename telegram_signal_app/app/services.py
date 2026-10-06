@@ -4,6 +4,7 @@ import asyncio
 import copy
 import importlib
 import logging
+import math
 import time
 from .config import Settings
 from .db import Database
@@ -14,7 +15,7 @@ from .models import INSTRUMENTS, EXPIRIES
 class SignalService:
     def __init__(self, settings: Settings, market: MarketData, db: Database):
         self.settings, self.market, self.db = settings, market, db
-        self.cache: dict[tuple[str, int], tuple[int, dict]] = {}
+        self.cache: dict[tuple[str, int, int], tuple[int, dict]] = {}
         self.lock = asyncio.Lock()
         self.analyzer = None
         self.model_status = "loading"
@@ -34,40 +35,45 @@ class SignalService:
             raise MarketError("unsupported_expiry", "Выберите экспирацию 1, 3, 5 или 15 минут.")
         candles = await self.market.candles(symbol)
         last = candles[-1]
-        now = int(time.time())
-        age = max(0, now - last.time - 60)
-        fresh = age <= self.settings.max_data_age_seconds
-        key = symbol, expiry
+        data_as_of = last.time + 60
+        result = {"direction": "WAIT", "score": None, "probability": None, "quality": "unavailable",
+                  "model": "Logistic regression · v2", "validation": None, "indicators": {},
+                  "reasons": ["Модель загружается. Анализ появится после подготовки библиотек."
+                              if self.model_status == "loading" else "Библиотеки модели недоступны. Проверьте зависимости сервера."],
+                  "model_ready": False}
         async with self.lock:
-            cached = self.cache.get(key)
-            if cached and cached[0] == last.time:
-                result = copy.deepcopy(cached[1])
-            elif fresh and self.analyzer is not None:
-                result = await asyncio.to_thread(self.analyzer, candles, expiry, self.settings)
-                self.cache[key] = (last.time, copy.deepcopy(result))
-            else:
-                result = {"direction": "WAIT", "score": None, "model": "Logistic regression · v1",
-                          "validation": None, "indicators": {}, "reasons": [
-                              "Модель загружается. График доступен; анализ появится после подготовки библиотек."
-                              if self.model_status == "loading" else "Библиотеки модели недоступны. Проверьте зависимости сервера."
-                          ], "model_ready": False}
+            for _ in range(3):
+                now = int(time.time())
+                lead = max(1, math.ceil((now + 10 - data_as_of) / 60))
+                entry = data_as_of + lead * 60
+                if now - data_as_of > self.settings.max_data_age_seconds or self.analyzer is None:
+                    break
+                key = symbol, expiry, lead
+                cached = self.cache.get(key)
+                if cached and cached[0] == last.time:
+                    result = copy.deepcopy(cached[1])
+                else:
+                    result = await asyncio.to_thread(self.analyzer, candles, expiry, self.settings, entry_delay=lead)
+                    self.cache[key] = (last.time, copy.deepcopy(result))
+                if entry - int(time.time()) >= 10:
+                    break
         # Recheck time after potentially expensive training, even for cached models.
         now = int(time.time())
         age = max(0, now - last.time - 60)
         fresh = age <= self.settings.max_data_age_seconds
-        entry = last.time + 120
         if not fresh:
-            result.update(direction="WAIT", reasons=["Котировки устарели или рынок закрыт. Дождитесь свежих данных."])
+            result.update(direction="WAIT", probability=None, quality="unavailable", reasons=["Котировки устарели или рынок закрыт. Для круглосуточного анализа доступны BTC/USDT и ETH/USDT, если их источник отвечает."])
         elif entry - now < 10:
-            result.update(direction="WAIT", reasons=["Окно входа заканчивается. Дождитесь следующей закрытой свечи."])
+            result.update(direction="WAIT", probability=None, quality="unavailable", reasons=["Расчёт задержался. Повторите анализ для нового времени входа."])
         result.update(symbol=symbol, label=INSTRUMENTS[symbol].label, provider=INSTRUMENTS[symbol].provider,
                       category=INSTRUMENTS[symbol].category, expiry=expiry, candle_time=last.time,
                       data_as_of=last.time + 60, data_age_seconds=age, fresh=fresh, price=last.close,
-                      entry_at=entry, close_at=entry + expiry * 60, server_time=now,
+                      entry_at=entry, entry_delay=lead, close_at=entry + expiry * 60, server_time=now,
+                      status="scheduled" if result["direction"] != "WAIT" else ("loading" if fresh and self.model_status == "loading" else "unavailable"),
                       change_percent=round((last.close / candles[max(0, len(candles)-61)].close - 1) * 100, 3),
                       candles=[c.to_dict() for c in candles[-120:]], sample_count=len(candles),
                       price_note="Внешние котировки. Сверьте актив и цену в Pocket Option; OTC не поддерживается.",
-                      score_note="Оценка модели не является подтверждённой вероятностью выигрыша.")
+                      score_note="Оценка успеха направления на внешнем рынке. Вероятность выигрыша в Pocket Option не проверена.")
         return result
 
     async def create(self, symbol: str, expiry: int) -> dict:
@@ -77,5 +83,6 @@ class SignalService:
         if self.model_status != "ready":
             raise MarketError("model_loading" if self.model_status == "loading" else "model_error", result["reasons"][0])
         # Do not retain 120 chart candles in every journal entry.
-        return await self.db.save({k: v for k, v in result.items() if k != "candles"})
+        saved = await self.db.save({k: v for k, v in result.items() if k != "candles"})
+        return {**saved, "candles": result["candles"], "server_time": int(time.time())}
 

@@ -36,74 +36,127 @@ def features(candles: list[Candle]) -> tuple[np.ndarray, dict]:
     return result, indicators
 
 
-def dataset(candles: list[Candle], horizon: int):
+def dataset(candles: list[Candle], horizon: int, entry_delay: int = 1):
+    """Entry is entry_delay minutes after the feature candle closes. -1 means a draw."""
     x, indicators = features(candles)
     times = np.array([c.time for c in candles])
     indices, targets = [], []
-    # Feature at i closes at i+1. Entry at i+2 allows one minute of notice.
-    # Expiration h minutes later uses the close of candle i+1+h.
-    for i in range(30, len(candles) - horizon - 1):
-        if not np.all(np.diff(times[i - 30:i + horizon + 2]) == 60):
+    for i in range(30, len(candles) - horizon - entry_delay):
+        if not np.all(np.diff(times[i - 30:i + horizon + entry_delay + 1]) == 60):
             continue
-        delta = candles[i + horizon + 1].close - candles[i + 2].open
-        if delta == 0:
-            continue
+        delta = candles[i + horizon + entry_delay].close - candles[i + entry_delay + 1].open
         indices.append(i)
-        targets.append(int(delta > 0))
+        targets.append(-1 if delta == 0 else int(delta > 0))
     return x, np.array(indices, dtype=int), np.array(targets), indicators
 
 
-def analyze(candles: list[Candle], horizon: int, settings: Settings) -> dict:
-    base = {"direction": "WAIT", "score": None, "model": "Logistic regression · v1",
+def chronological_split(indices, horizon, entry_delay):
+    """60% train, 20% calibration, 20% test; purge overlapping outcomes at both edges."""
+    a, b = int(len(indices) * .6), int(len(indices) * .8)
+    gap = horizon + entry_delay
+    train = np.flatnonzero(indices + gap < indices[a])
+
+    def spaced(start, end, before=None):
+        positions, previous = [], -10000
+        for p in range(start, end):
+            if before is not None and indices[p] + gap >= before:
+                continue
+            if indices[p] - previous >= gap:
+                positions.append(p)
+                previous = indices[p]
+        return np.array(positions, dtype=int)
+
+    return train, spaced(a, b, indices[b]), spaced(b, len(indices))
+
+
+def probability_estimate(score, calibration_scores, calibration_wins, draw_rate=0.):
+    """Fixed confidence bins on disjoint history, with Beta(1,1) smoothing.
+
+    This estimates direction success on the external feed, not broker profitability.
+    Draws count as non-wins. Test outcomes never enter this estimate.
+    """
+    bin_id = int(np.clip(np.floor(score * 10 - 5 + 1e-9), 0, 4))
+    bins = np.clip(np.floor(calibration_scores * 10 - 5 + 1e-9), 0, 4).astype(int)
+    matches = calibration_wins[bins == bin_id]
+    n, wins = len(matches), int(matches.sum())
+    if n < 30:
+        return {"value": round(score * (1 - draw_rate) * 100, 1), "method": "uncalibrated_model",
+                "samples": n, "wins": wins, "interval": None,
+                "note": "Предварительная оценка модели: мало похожих примеров для калибровки."}
+    p = wins / n
+    z = 1.96
+    center = (p + z*z/(2*n)) / (1 + z*z/n)
+    radius = z * np.sqrt(p*(1-p)/n + z*z/(4*n*n)) / (1 + z*z/n)
+    return {"value": round((wins + 1) / (n + 2) * 100, 1), "method": "historical_bin",
+            "samples": n, "wins": wins,
+            "interval": [round((center-radius)*100, 1), round((center+radius)*100, 1)],
+            "note": f"Калибровка по {n} похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."}
+
+
+def analyze(candles: list[Candle], horizon: int, settings: Settings, entry_delay: int = 1) -> dict:
+    base = {"direction": "WAIT", "score": None, "probability": None,
+            "quality": "unavailable", "model": "Logistic regression · v2",
             "validation": None, "indicators": {}, "reasons": [], "model_ready": False}
     if len(candles) < 300:
         base["reasons"] = ["Для обучения нужно минимум 300 закрытых минутных свечей."]
         return base
-    x, indices, targets, indicators = dataset(candles, horizon)
+    x, indices, targets, indicators = dataset(candles, horizon, entry_delay)
     base["indicators"] = indicators
-    if len(indices) < 220 or len(np.unique(targets)) < 2:
-        base["reasons"] = ["Недостаточно непрерывной истории с движением в обе стороны."]
+    if not all(candles[i].time - candles[i-1].time == 60 for i in range(len(candles)-30, len(candles))):
+        base["reasons"] = ["В последних свечах есть разрывы: нужен непрерывный участок рынка."]
         return base
-    boundary = int(len(indices) * .75)
-    train = indices + horizon + 1 < indices[boundary]
-    test_positions = []
-    last_index = -1000
-    for p in range(boundary, len(indices)):
-        if indices[p] - last_index >= horizon + 1:
-            test_positions.append(p)
-            last_index = indices[p]
-    test = np.array(test_positions)
-    if train.sum() < 150 or len(test) < 12 or len(np.unique(targets[train])) < 2:
-        base["reasons"] = ["Для этой экспирации недостаточно независимых проверочных примеров."]
+    if len(indices) < 220:
+        base["reasons"] = ["Недостаточно непрерывной истории для этой экспирации."]
+        return base
+    train, calibration, test = chronological_split(indices, horizon, entry_delay)
+    train = train[targets[train] >= 0]
+    if len(train) < 120 or len(np.unique(targets[train])) < 2:
+        base["reasons"] = ["Недостаточно обучающих примеров с движением в обе стороны."]
         return base
     model = make_pipeline(StandardScaler(), LogisticRegression(C=.2, max_iter=400))
     model.fit(x[indices[train]], targets[train])
-    probabilities = model.predict_proba(x[indices[test]])[:, 1]
-    prediction = probabilities >= .5
-    accuracy = float(np.mean(prediction == targets[test]))
+
+    def predict(positions):
+        up = model.predict_proba(x[indices[positions]])[:, 1]
+        return np.maximum(up, 1-up), (up >= .5).astype(int)
+
+    cal_scores, cal_directions = predict(calibration)
+    cal_wins = cal_directions == targets[calibration]
+    draw_rate = float(np.mean(targets[calibration] == -1))
+    test_scores, test_directions = predict(test)
+    wins = test_directions == targets[test]
+    accuracy = float(np.mean(wins))
     majority = int(np.mean(targets[train]) >= .5)
     baseline = float(np.mean(targets[test] == majority))
-    selected = np.maximum(probabilities, 1 - probabilities) >= settings.model_min_score
+    selected = test_scores >= settings.model_min_score
     selected_count = int(selected.sum())
-    selected_accuracy = float(np.mean(prediction[selected] == targets[test][selected])) if selected_count else None
-    validation = {"samples": len(test), "training_samples": int(train.sum()),
-                  "accuracy": round(accuracy * 100, 1), "baseline": round(baseline * 100, 1),
-                  "selected_samples": selected_count,
-                  "selected_accuracy": round(selected_accuracy * 100, 1) if selected_accuracy is not None else None,
-                  "method": "chronological_holdout_purged_nonoverlapping"}
+    selected_accuracy = float(np.mean(wins[selected])) if selected_count else None
     up = float(model.predict_proba(x[-1:])[:, 1][0])
-    score = max(up, 1 - up)
-    reasons = []
-    if not all(candles[i].time - candles[i - 1].time == 60 for i in range(len(candles) - 30, len(candles))):
-        reasons.append("В последних свечах есть разрывы: прогноз остановлен.")
-    if accuracy < max(settings.model_min_validation, baseline + .02):
-        reasons.append("На отложенной истории модель не показала достаточного преимущества над базовым прогнозом.")
+    score = max(up, 1-up)
+    probability = probability_estimate(score, cal_scores, cal_wins, draw_rate)
+    test_estimates = np.array([probability_estimate(s, cal_scores, cal_wins, draw_rate)["value"] / 100 for s in test_scores])
+    validation = {"samples": len(test), "training_samples": len(train), "calibration_samples": len(calibration),
+                  "accuracy": round(accuracy*100, 1), "baseline": round(baseline*100, 1),
+                  "selected_samples": selected_count,
+                  "selected_accuracy": round(selected_accuracy*100, 1) if selected_accuracy is not None else None,
+                  "brier_score": round(float(np.mean((test_estimates-wins)**2)), 4),
+                  "method": "train_calibration_test_purged_nonoverlapping"}
+    warnings = []
+    if len(test) < 30 or accuracy < max(settings.model_min_validation, baseline + .02):
+        warnings.append("Преимущество модели на контрольной истории не подтверждено: сигнал слабый.")
     if selected_count < 20 or selected_accuracy is None or selected_accuracy < settings.model_min_validation:
-        reasons.append("Недостаточно подтверждений для сильных прогнозов на отложенной истории.")
+        warnings.append("Сильных успешных прогнозов на проверочной выборке недостаточно.")
     if score < settings.model_min_score:
-        reasons.append(f"Оценка модели ниже порога {settings.model_min_score:.0%}.")
-    base.update(score=round(score * 100, 1), validation=validation, indicators=indicators, model_ready=True,
-                direction="WAIT" if reasons else ("CALL" if up >= .5 else "PUT"),
-                reasons=reasons or ["Порог модели и проверка на отложенной истории пройдены.",
-                                   f"EMA 9 {'выше' if indicators['trend'] == 'up' else 'ниже'} EMA 21; RSI {indicators['rsi']}."])
+        warnings.append(f"Уверенность ниже фильтра качества {settings.model_min_score:.0%}; направление показано как предварительный прогноз.")
+    if probability["method"] != "historical_bin":
+        warnings.append("Процент пока не откалиброван на достаточной выборке.")
+    if probability["value"] < settings.model_min_validation * 100:
+        warnings.append("Оценка шанса низкая; это не рекомендация входить в сделку.")
+    base.update(direction="CALL" if up >= .5 else "PUT", score=round(score*100, 1),
+                probability=probability, quality="weak" if warnings else "qualified",
+                validation=validation, model_ready=True,
+                reasons=[f"EMA 9 {'выше' if indicators['trend'] == 'up' else 'ниже'} EMA 21; RSI {indicators['rsi']}.",
+                         *(warnings or ["Фильтры качества на контрольной истории пройдены."])])
     return base
+
+

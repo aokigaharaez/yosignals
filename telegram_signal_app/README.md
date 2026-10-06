@@ -69,6 +69,46 @@ BotFather и обновите `BOT_TOKEN`. Из нового шаблона се
 журнал, запись результатов и автоанализ требуют Telegram-авторизации.
 После истечения сессии закройте и откройте Mini App заново.
 
+## Развёртывание на Railway
+
+Если в журнале сборки Railpack видны только папка `telegram_signal_app/` и
+`README.md`, выбрана неверная корневая папка. В GitHub файлы приложения находятся
+на один уровень глубже, чем ожидает Railway.
+
+1. Обновите содержимое `telegram_signal_app/` в GitHub файлами этого проекта,
+   включая `Dockerfile`, `.dockerignore`, `.python-version`, `requirements.txt`
+   и папку `app/`. Не загружайте `.env`, `.venv` или локальную базу данных.
+2. В сервисе Railway откройте **Settings → Source → Root Directory** и задайте
+   `/telegram_signal_app`. Если `requirements.txt`, `Dockerfile` и `app/` лежат
+   прямо в корне GitHub-репозитория, оставьте корневую папку `/`.
+3. Railway автоматически использует `Dockerfile` из выбранной папки. Очистите
+   старые пользовательские Build Command / Start Command, если они были заданы.
+   В образе команда запуска уже настроена: `python -m app.main`.
+4. В **Variables** задайте `BOT_TOKEN`, `OWNER_TELEGRAM_ID`,
+   `TWELVE_DATA_API_KEY`, `HOST=0.0.0.0`, `LOCAL_PREVIEW=false`.
+   `PORT` предоставляет Railway; приложение читает его автоматически.
+5. Добавьте постоянный **Volume** с Mount Path `/data` и задайте
+   `DB_PATH=/data/signals.db`. Без Volume журнал исчезнет при пересоздании контейнера.
+6. В **Settings → Deploy** задайте Healthcheck Path `/health`.
+   Оставьте одну реплику: несколько экземпляров будут конфликтовать за polling бота.
+7. Примените настройки и запустите **Deploy**. После успешного запуска откройте
+   **Settings → Networking → Public Networking → Generate Domain**.
+8. Скопируйте полученный HTTPS-адрес в `WEBAPP_URL` и примените изменение.
+   Затем отправьте боту `/start` и откройте приложение его кнопкой.
+
+Публичная страница открывается в браузере, но защищённые данные и функции доступны
+только из Telegram владельцу бота. Сообщение «Откройте приложение через Telegram»
+в обычном браузере после развёртывания ожидаемо.
+
+Быстрое исправление текущей ошибки без Dockerfile: задайте Root Directory
+`/telegram_signal_app`, Start Command `python -m app.main`, `HOST=0.0.0.0`
+и `LOCAL_PREVIEW=false`, затем повторите Deploy. Это исправляет обнаружение
+Python-проекта; если далее появится другая ошибка, изучите новый Build Log.
+
+Документация: [корневая папка Railway](https://docs.railway.com/deployments/monorepo),
+[сборка Dockerfile](https://docs.railway.com/builds/dockerfiles),
+[проверка здоровья и PORT](https://docs.railway.com/deployments/healthchecks).
+
 ## Команды бота
 
 - /start — открыть Mini App и помощь.

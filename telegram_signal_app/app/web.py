@@ -24,6 +24,7 @@ from .db import Database
 from .market import MarketData, MarketError
 from .models import INSTRUMENTS, EXPIRIES
 from .services import SignalService
+from .scheduler import SignalScheduler
 
 STATIC = Path(__file__).parent / "static"
 log = logging.getLogger(__name__)
@@ -58,8 +59,8 @@ def create_app(settings: Settings) -> FastAPI:
             app.state.service, app.state.db = service, db
             app.state.bot_ready = False
             app.state.bot_status = "disabled" if not settings.bot_enabled else "not_configured"
-            app.state.scheduler = None
-            tasks = [asyncio.create_task(service.prepare_model())]
+            app.state.scheduler = SignalScheduler(settings, db, service)
+            tasks = [asyncio.create_task(service.prepare_model()), asyncio.create_task(app.state.scheduler.run())]
             if settings.bot_enabled and settings.bot_token and settings.owner_id:
                 app.state.bot_status = "loading"
 
@@ -136,7 +137,7 @@ def create_app(settings: Settings) -> FastAPI:
 
     @app.get("/health")
     async def health():
-        return {"status": "ok"}
+        return {"status": "ok", "version": "2.0", "delivery": "miniapp"}
 
     @app.get("/api/session")
     async def session(request: Request):
@@ -147,6 +148,7 @@ def create_app(settings: Settings) -> FastAPI:
                 "bot_status": app.state.bot_status, "model_status": app.state.service.model_status,
                 "forex_ready": bool(settings.twelve_data_api_key), "webapp_ready": bool(settings.webapp_url),
                 "min_score": settings.model_min_score * 100, "max_data_age_seconds": settings.max_data_age_seconds,
+                "delivery": "miniapp", "version": "2.0",
                 "instruments": [asdict(i) for i in INSTRUMENTS.values()], "expiries": EXPIRIES}
 
     @app.get("/api/market")
@@ -163,7 +165,7 @@ def create_app(settings: Settings) -> FastAPI:
     @app.get("/api/history")
     async def history(request: Request):
         user(request)
-        return {"items": await db.history(), "stats": await db.stats()}
+        return {"items": await db.history(), "stats": await db.stats(), "server_time": int(time.time())}
 
     @app.post("/api/history/{run_id}/result")
     async def result(request: Request, run_id: int, body: ResultRequest):
@@ -180,15 +182,14 @@ def create_app(settings: Settings) -> FastAPI:
 
     @app.put("/api/watch")
     async def set_watch(request: Request, body: WatchRequest):
-        user(request)
+        rate_limit(user(request))
         if body.symbol not in INSTRUMENTS:
             raise HTTPException(422, "Неизвестный актив. OTC недоступен.")
-        if body.enabled and not app.state.bot_ready:
-            raise HTTPException(409, "Бот не подключён. Проверьте BOT_TOKEN и OWNER_TELEGRAM_ID.")
         if body.enabled:
             snapshot = await app.state.service.snapshot(body.symbol, body.expiry)
             if not snapshot["fresh"]:
                 raise HTTPException(409, "Нет свежих данных для автоанализа.")
+        app.state.scheduler.scan_error = None
         return await db.set_watch(body.enabled, body.symbol, body.expiry)
 
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
