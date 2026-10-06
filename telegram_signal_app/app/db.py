@@ -13,14 +13,17 @@ class Database:
     async def init(self) -> None:
         async with aiosqlite.connect(self.path) as db:
             await db.execute("PRAGMA journal_mode=WAL")
+            existing = await (await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('analysis_runs','analysis_runs_v2')")).fetchall()
+            names = {row[0] for row in existing}
             await db.executescript("""
-                CREATE TABLE IF NOT EXISTS analysis_runs (
+                BEGIN IMMEDIATE;
+                CREATE TABLE IF NOT EXISTS analysis_runs_v2 (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     symbol TEXT NOT NULL, expiry INTEGER NOT NULL, candle_time INTEGER NOT NULL,
                     direction TEXT NOT NULL, entry_at INTEGER NOT NULL, close_at INTEGER NOT NULL,
                     created_at INTEGER NOT NULL, payload TEXT NOT NULL,
                     result TEXT, result_source TEXT,
-                    UNIQUE(symbol, expiry, candle_time)
+                    UNIQUE(symbol, expiry, candle_time, entry_at)
                 );
                 CREATE TABLE IF NOT EXISTS watch_settings (
                     id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -34,19 +37,22 @@ class Database:
                     PRIMARY KEY(run_id, event)
                 );
             """)
+            # One-time, non-destructive migration: preserve IDs/results and the original table.
+            if "analysis_runs" in names and "analysis_runs_v2" not in names:
+                await db.execute("INSERT INTO analysis_runs_v2 SELECT * FROM analysis_runs")
             await db.commit()
 
     async def save(self, payload: dict) -> dict:
         async with aiosqlite.connect(self.path) as db:
             await db.execute("""
-                INSERT OR IGNORE INTO analysis_runs
+                INSERT OR IGNORE INTO analysis_runs_v2
                 (symbol, expiry, candle_time, direction, entry_at, close_at, created_at, payload)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (payload["symbol"], payload["expiry"], payload["candle_time"], payload["direction"],
                   payload["entry_at"], payload["close_at"], int(time.time()), json.dumps(payload, ensure_ascii=False, allow_nan=False)))
             await db.commit()
-            cursor = await db.execute("SELECT * FROM analysis_runs WHERE symbol=? AND expiry=? AND candle_time=?",
-                                      (payload["symbol"], payload["expiry"], payload["candle_time"]))
+            cursor = await db.execute("SELECT * FROM analysis_runs_v2 WHERE symbol=? AND expiry=? AND candle_time=? AND entry_at=?",
+                                      (payload["symbol"], payload["expiry"], payload["candle_time"], payload["entry_at"]))
             row = await cursor.fetchone()
         return self._record(row)
 
@@ -58,20 +64,20 @@ class Database:
 
     async def get(self, run_id: int) -> dict | None:
         async with aiosqlite.connect(self.path) as db:
-            cursor = await db.execute("SELECT * FROM analysis_runs WHERE id=?", (run_id,))
+            cursor = await db.execute("SELECT * FROM analysis_runs_v2 WHERE id=?", (run_id,))
             row = await cursor.fetchone()
         return self._record(row) if row else None
 
     async def history(self, limit: int = 60) -> list[dict]:
         async with aiosqlite.connect(self.path) as db:
-            cursor = await db.execute("SELECT * FROM analysis_runs ORDER BY id DESC LIMIT ?", (limit,))
+            cursor = await db.execute("SELECT * FROM analysis_runs_v2 ORDER BY id DESC LIMIT ?", (limit,))
             rows = await cursor.fetchall()
         return [self._record(row) for row in rows]
 
     async def upcoming(self) -> list[dict]:
         async with aiosqlite.connect(self.path) as db:
             cursor = await db.execute("""
-                SELECT * FROM analysis_runs WHERE direction IN ('CALL','PUT')
+                SELECT * FROM analysis_runs_v2 WHERE direction IN ('CALL','PUT')
                 AND result IS NULL AND close_at > ? ORDER BY entry_at
             """, (int(time.time()) - 60,))
             rows = await cursor.fetchall()
@@ -82,7 +88,7 @@ class Database:
             raise ValueError("Invalid result")
         async with aiosqlite.connect(self.path) as db:
             cursor = await db.execute("""
-                UPDATE analysis_runs SET result=?, result_source='user_reported'
+                UPDATE analysis_runs_v2 SET result=?, result_source='user_reported'
                 WHERE id=? AND result IS NULL AND close_at<=? AND direction IN ('CALL','PUT')
             """, (result, run_id, int(time.time())))
             await db.commit()
@@ -95,7 +101,7 @@ class Database:
                 COALESCE(SUM(direction IN ('CALL','PUT')),0),
                 COALESCE(SUM(result='WIN'),0), COALESCE(SUM(result='LOSS'),0),
                 COALESCE(SUM(result='DRAW'),0)
-                FROM analysis_runs
+                FROM analysis_runs_v2
             """)
             total, signals, wins, losses, draws = await cursor.fetchone()
         return {"analyses": total, "signals": signals, "wins": wins, "losses": losses, "draws": draws,

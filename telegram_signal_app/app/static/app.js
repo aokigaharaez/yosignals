@@ -1,6 +1,6 @@
 "use strict";
 const $ = id => document.getElementById(id);
-const state = {session:null, symbol:"EURUSD", expiry:3, category:"forex", chart:"candles", snapshot:null, sequence:0, loading:false, watch:null, offset:0, page:"overview"};
+const state = {session:null, symbol:"EURUSD", expiry:3, category:"forex", chart:"candles", snapshot:null, sequence:0, loading:false, analyzing:false, watch:null, offset:0, page:"overview", history:[], historyLoaded:false, seenId:0, events:new Set(), historyLoading:false};
 const tg = window.Telegram?.WebApp;
 if (tg?.initData) { tg.ready(); tg.expand(); tg.setHeaderColor?.("#f5f7f9"); tg.setBackgroundColor?.("#f5f7f9"); }
 const now = () => Date.now()/1000 + state.offset;
@@ -60,7 +60,8 @@ function resetMetrics() {
   text("asset-price","—");text("asset-change","Изменение за 60 мин");
   $("asset-change").className="";
   text("data-metric","Подключение");text("data-detail","Проверяем закрытые свечи");
-  text("score-metric","— / 100");text("validation-metric","—");text("validation-detail","Вне обучающей выборки");
+  text("score-metric","—");text("probability-detail","Оценка по внешнему рынку");text("validation-metric","—");text("validation-detail","Вне обучающей выборки");
+  $("forecast-quality").hidden=true;
   ["trend-value","ema-value","rsi-value","atr-value"].forEach(id=>text(id,"—"));
   $("signal-state").className="signal-state";text("signal-symbol","∿");text("signal-direction","Ожидание данных");
   text("signal-summary","Анализ появится после получения рыночных свечей.");$("signal-timing").hidden=true;
@@ -71,7 +72,7 @@ function resetMetrics() {
 }
 async function loadMarket(reset=false) {
   if(!state.session) return;
-  const seq=++state.sequence; state.loading=true;
+  const seq=++state.sequence; state.marketSequence=seq;state.loading=true;
   if(reset) resetMetrics();
   $("refresh-button").disabled=true;
   try {
@@ -85,7 +86,7 @@ async function loadMarket(reset=false) {
     text("chart-empty-title",error.code==="missing_key"?"Подключите валютный рынок":"Котировки недоступны");
     text("chart-empty-text",error.message);$("chart-retry").hidden=false;
     text("signal-direction","Нет данных");text("signal-summary","Для анализа нужны реальные свежие котировки. Проверьте подключение.");
-  } finally { if(seq===state.sequence){state.loading=false;$("refresh-button").disabled=false;} }
+  } finally { if(seq===state.marketSequence){state.loading=false;$("refresh-button").disabled=false;} }
 }
 function renderSnapshot() {
   const d=state.snapshot;if(!d)return;
@@ -93,13 +94,19 @@ function renderSnapshot() {
   text("asset-price",price(d.price));text("asset-change",`${d.change_percent>=0?"+":""}${d.change_percent.toFixed(3)}% за 60 мин`);
   $("asset-change").className=d.change_percent>=0?"positive":"negative";
   text("data-metric",d.fresh?"Актуальны":"Устарели");text("data-detail",`${d.sample_count} свечей · обновлено ${clockTime(d.data_as_of)}`);
-  text("score-metric",d.score==null?"— / 100":`${d.score.toFixed(1)} / 100`);
+  text("score-metric",chance(d));
+  text("probability-detail",d.probability?(d.probability.method==="historical_bin"?`${d.probability.samples} похожих прогнозов`:"Предварительная оценка · без калибровки"):"Недостаточно данных для оценки");
   text("validation-metric",d.validation?`${d.validation.accuracy}%`:"—");
   text("validation-detail",d.validation?`${d.validation.samples} примеров · база ${d.validation.baseline}%`:"Недостаточно истории");
-  const labels={WAIT:"Ждать",CALL:"CALL · Вверх",PUT:"PUT · Вниз"};
+  const labels={WAIT:d.status==="loading"?"Подготовка анализа":"Нет прогноза",CALL:"CALL · Вверх",PUT:"PUT · Вниз"};
   text("signal-direction",labels[d.direction]);text("signal-symbol",{WAIT:"∿",CALL:"↗",PUT:"↘"}[d.direction]);
   $("signal-state").className=`signal-state ${d.direction.toLowerCase()}`;
   text("signal-summary",d.reasons.join(" "));
+  $("forecast-quality").hidden=d.direction==="WAIT";
+  text("quality-badge",d.quality==="qualified"?"Фильтры качества пройдены":"Слабый сигнал · высокий риск");
+  $("quality-badge").className=`quality-badge ${d.quality||"weak"}`;
+  text("chance-value",chance(d));text("chance-note",d.probability?.note||"Оценка недоступна");
+  text("chance-interval",d.probability?.interval?`Исторический диапазон 95%: ${d.probability.interval[0]}–${d.probability.interval[1]}%. Это не гарантия для текущей сделки.`:"Для исторического диапазона пока мало данных.");
   $("signal-timing").hidden=d.direction==="WAIT";
   text("close-time",clockTime(d.close_at));
   const i=d.indicators;
@@ -137,54 +144,113 @@ function drawChart() {
 new ResizeObserver(drawChart).observe($("market-chart"));
 $("refresh-button").addEventListener("click",()=>loadMarket());$("chart-retry").addEventListener("click",()=>loadMarket(true));
 $("analyze-button").addEventListener("click",async()=>{
-  if(!state.session)return;
-  const button=$("analyze-button");button.disabled=true;
+  if(!state.session||state.analyzing)return;
+  const button=$("analyze-button"),symbol=state.symbol,expiry=state.expiry;button.disabled=true;state.analyzing=true;
+  const seq=++state.sequence;
+  button.querySelector("span").textContent="Анализируем рынок…";
   try {
-    await loadMarket();
-    if(state.session.preview){if(state.snapshot)toast("Анализ обновлён. Чтобы сохранить его в журнал, откройте Mini App в Telegram.");return;}
-    if(!state.snapshot || !state.snapshot.fresh)return;
-    const run=await api("/api/analyses",{method:"POST",body:JSON.stringify({symbol:state.symbol,expiry:state.expiry})});
-    toast(`Анализ #${run.id} сохранён: ${run.direction==="WAIT"?"Ждать":run.direction}.`);loadHistory();
-  }catch(error){toast(error.message);}finally{button.disabled=false;}
+    const run=state.session.preview?await api(`/api/market?symbol=${encodeURIComponent(symbol)}&expiry=${expiry}`):await api("/api/analyses",{method:"POST",body:JSON.stringify({symbol,expiry})});
+    if(seq===state.sequence){state.snapshot=run;state.offset=run.server_time-Date.now()/1000;renderSnapshot();}
+    if(state.session.preview)toast("Прогноз готов. Для сохранения и автоанализа откройте Mini App в Telegram.");
+    else {state.seenId=Math.max(state.seenId,run.id);toast(`Анализ #${run.id} · ${run.label}: ${run.direction==="WAIT"?"нет прогноза":run.direction}.`);await loadHistory();}
+  }catch(error){toast(error.message);}finally{button.disabled=false;state.analyzing=false;button.querySelector("span").textContent="Получить сигнал";}
 });
 function renderWatch() {
   $("watch-toggle").setAttribute("aria-checked",String(!!state.watch?.enabled));
-  text("watch-description",state.watch?.error || (state.watch?.enabled?`${state.watch.symbol} · ${state.watch.expiry} мин · включён`:"Сигналы в Telegram"));
+  text("watch-description",state.watch?.error || (state.watch?.enabled?`${state.watch.symbol} · ${state.watch.expiry} мин · в Mini App`:"Сигналы внутри Mini App"));
 }
 $("watch-toggle").addEventListener("click",async()=>{
   if(!state.session)return;
   if(state.session.preview){toast("Автоанализ включается внутри Telegram. Откройте раздел «Подключения».");return;}
   const button=$("watch-toggle");button.disabled=true;
-  try { state.watch=await api("/api/watch",{method:"PUT",body:JSON.stringify({enabled:!state.watch?.enabled,symbol:state.symbol,expiry:state.expiry})});renderWatch();toast(state.watch.enabled?"Автоанализ включён. Новые сигналы придут в Telegram.":"Автоанализ остановлен."); }
+  try { state.watch=await api("/api/watch",{method:"PUT",body:JSON.stringify({enabled:!state.watch?.enabled,symbol:state.symbol,expiry:state.expiry})});renderWatch();toast(state.watch.enabled?"Автоанализ включён. Сигналы появятся в ленте Mini App.":"Автоанализ остановлен."); }
   catch(error){toast(error.message);}finally{button.disabled=false;}
 });
 function node(tag,className,value){const e=document.createElement(tag);if(className)e.className=className;if(value!=null)e.textContent=value;return e;}
+function chance(run) { return run.probability?.value==null ? "—" : `≈${Math.round(run.probability.value)}%`; }
+function phase(run) {
+  if(run.result)return run.result;
+  if(run.direction==="WAIT")return "Нет прогноза";
+  const entry=Math.ceil(run.entry_at-now()),close=Math.ceil(run.close_at-now());
+  if(entry>0)return `Вход через ${entry} сек · ${clockTime(run.entry_at)}`;
+  if(close>0)return `До закрытия ${close} сек`;
+  return "Закрыт · отметьте результат";
+}
+function resultButtons(run) {
+  const buttons=node("div","result-buttons");
+  for(const value of ["WIN","LOSS","DRAW"]){
+    const b=node("button","",value);
+    b.addEventListener("click",async()=>{
+      for(const sibling of buttons.children)sibling.disabled=true;
+      try{await api(`/api/history/${run.id}/result`,{method:"POST",body:JSON.stringify({result:value})});await loadHistory();}
+      catch(error){toast(error.message);for(const sibling of buttons.children)sibling.disabled=false;}
+    });buttons.append(b);
+  }
+  return buttons;
+}
+function renderFeed() {
+  $("recent-list").replaceChildren(...state.history.slice(0,6).map(r=>{
+    const e=node("article",`signal-feed-card ${r.quality||""}`),head=node("div","signal-feed-title");
+    head.append(node("strong","",r.label),node("span",`direction-pill ${r.direction.toLowerCase()}`,r.direction==="WAIT"?"Нет прогноза":r.direction));
+    if(r.direction!=="WAIT")head.append(node("span",`quality-badge ${r.quality||""}`,r.quality==="qualified"?"Фильтры пройдены":"Слабый"));
+    const probability=node("div","signal-feed-probability",chance(r));probability.append(node("small","probability-caption",r.probability?.method==="historical_bin"?"по похожим прогнозам":"предварительно"));
+    const timer=node("div","signal-feed-clock",phase(r));timer.dataset.runClock=r.id;
+    e.append(head,probability,node("div","signal-feed-meta",`${r.expiry} мин · ${r.provider} · анализ #${r.id}`),timer);
+    if(!r.result && r.direction!=="WAIT" && now()>=r.close_at)e.append(resultButtons(r));
+    return e;
+  }));
+  if(!state.history.length)$("recent-list").append(node("div","empty-inline","Нажмите «Получить сигнал». Результат появится здесь; чат бота останется свободным от сигналов."));
+}
 async function loadHistory() {
-  if(!state.session || state.session.preview){const message="Откройте Mini App в Telegram, чтобы вести личный журнал сигналов.";$("recent-list").replaceChildren(node("div","empty-inline",message));$("history-list").replaceChildren(node("div","empty-inline",message));return;}
+  if(!state.session || state.session.preview){const message="Лента сигналов и история доступны внутри Telegram Mini App. Анализ рынка можно посмотреть здесь.";$("recent-list").replaceChildren(node("div","empty-inline",message));$("history-list").replaceChildren(node("div","empty-inline",message));return;}
+  if(state.historyLoading)return;
+  state.historyLoading=true;
   try {
     const data=await api("/api/history");const s=data.stats;
+    state.offset=data.server_time-Date.now()/1000;
+    const fresh=data.items.filter(r=>r.id>state.seenId && r.direction!=="WAIT");
+    if(state.historyLoaded && fresh.length){const r=fresh[0];toast(`Новый сигнал в Mini App: ${r.label} ${r.direction} · шанс по модели ${chance(r)}${r.quality==="weak"?" · слабый сигнал":""}.`);tg?.HapticFeedback?.notificationOccurred?.("success");}
+    state.seenId=Math.max(state.seenId,...data.items.map(r=>r.id));state.historyLoaded=true;state.history=data.items;
+    renderFeed();
     $("history-stats").replaceChildren(...[["Сигналов",s.signals],["WIN / LOSS",`${s.wins} / ${s.losses}`],["Win rate",s.win_rate==null?"—":`${s.win_rate}%`]].map(([label,val])=>{const e=node("article");e.append(node("small","",label),node("strong","",val));return e;}));
-    $("recent-list").replaceChildren(...data.items.slice(0,4).map(r=>{const e=node("div","recent-row");e.append(node("span","row-symbol",r.label),node("span",`direction-pill ${r.direction.toLowerCase()}`,r.direction==="WAIT"?"ЖДАТЬ":r.direction),node("small","row-expiry",`${r.expiry} мин`),node("small","",clockTime(r.created_at)),node("small","row-result",r.result||"—"));return e;}));
     $("history-list").replaceChildren(...data.items.map(r=>{
       const e=node("article","history-record"),head=node("div","history-record-head");
       const date=new Date(r.created_at*1000).toLocaleString("ru-RU",{timeZone:state.session.timezone});
-      head.append(node("strong","",r.label),node("span",`direction-pill ${r.direction.toLowerCase()}`,r.direction==="WAIT"?"ЖДАТЬ":r.direction),node("small","",`${date} · ${r.expiry} мин · ${r.provider}`));
-      e.append(head,node("p","",r.reasons.join(" ")));
-      if(r.result)e.append(node("span","result-label",`${r.result} · отмечено вами`));
-      else if(r.direction!=="WAIT" && now()>=r.close_at){const buttons=node("div","result-buttons");for(const value of ["WIN","LOSS","DRAW"]){const b=node("button","",value);b.addEventListener("click",async()=>{b.disabled=true;try{await api(`/api/history/${r.id}/result`,{method:"POST",body:JSON.stringify({result:value})});await loadHistory();}catch(err){toast(err.message);b.disabled=false;}});buttons.append(b);}e.append(buttons);}
-      else if(r.direction!=="WAIT")e.append(node("small","result-label",`Результат можно отметить после ${clockTime(r.close_at)}`));
+      head.append(node("strong","",r.label),node("span",`direction-pill ${r.direction.toLowerCase()}`,r.direction==="WAIT"?"Нет прогноза":r.direction),node("small","",`${date} · ${r.expiry} мин · ${r.provider}`));
+      e.append(head);
+      if(r.probability){
+        const detail=node("details"),summary=node("summary","",`Шанс по модели ${chance(r)} · ${r.quality==="qualified"?"фильтры пройдены":"слабый сигнал"}`);
+        detail.append(summary,node("p","",r.probability.note));
+        if(r.probability.interval)detail.append(node("p","",`Исторический диапазон 95%: ${r.probability.interval.join("–")}%.`));
+        detail.append(node("p","","Оценка по внешним котировкам; реальный шанс выигрыша у брокера не проверен."));e.append(detail);
+      }
+      e.append(node("p","",r.reasons.join(" ")));
+      const status=node("small","result-label",phase(r));status.dataset.runClock=r.id;e.append(status);
+      if(!r.result && r.direction!=="WAIT" && now()>=r.close_at)e.append(resultButtons(r));
       return e;
     }));
-    if(!data.items.length)for(const id of ["history-list","recent-list"])$(id).append(node("div","empty-inline","Сохранённых анализов пока нет. Нажмите «Проанализировать» на странице рынка."));
-  }catch(error){toast(error.message);}
+    if(!data.items.length)$("history-list").append(node("div","empty-inline","Сохранённых анализов пока нет. Нажмите «Получить сигнал» на странице рынка."));
+  }catch(error){toast(error.message);}finally{state.historyLoading=false;}
 }
 $("history-refresh").addEventListener("click",loadHistory);
 function tick(){
   text("clock",`${clockTime(now())} · ${state.session?.timezone||"UTC+3"}`);
+  for(const r of state.history){
+    document.querySelectorAll(`[data-run-clock="${r.id}"]`).forEach(el=>{el.textContent=phase(r);el.classList.toggle("live",!r.result&&r.entry_at<=now()&&r.close_at>now());});
+    if(document.hidden || r.result || r.direction==="WAIT")continue;
+    const remaining=r.entry_at-now();
+    const event=remaining>0&&remaining<=10?"soon":remaining<=0&&remaining>=-5?"entry":now()>=r.close_at&&now()<r.close_at+5?"close":null;
+    const key=`${r.id}:${event}`;
+    if(event&&!state.events.has(key)){
+      state.events.add(key);
+      toast(`${r.label} ${r.direction} · ${event==="soon"?"до входа менее 10 секунд":event==="entry"?"наступило время входа":"экспирация завершена, отметьте результат в истории"}${r.quality==="weak"?" · слабый сигнал":""}.`);
+      if(event==="close")loadHistory();
+    }
+  }
   const d=state.snapshot;if(!d)return;
-  const remaining=Math.ceil(d.entry_at-now());text("entry-countdown",remaining>0?`${remaining} сек`:"Окно закрыто");
-  if(d.direction!=="WAIT" && remaining<10){text("signal-direction","Ждать");text("signal-summary","Окно входа закрыто. Обновите анализ после новой свечи.");$("signal-state").className="signal-state";text("signal-symbol","∿");}
-  if(now()-d.data_as_of>(state.session.max_data_age_seconds||90)){text("data-metric","Устарели");$("live-dot").className="live-dot";text("chart-source",`${d.provider} · данные устарели`);}
+  const remaining=Math.ceil(d.entry_at-now());text("entry-countdown",remaining>0?`${remaining} сек`:"Вход завершён");
+  if(d.direction!=="WAIT" && remaining<=0){text("signal-direction","Время входа прошло");text("signal-summary","Нажмите «Получить сигнал» для нового входа. Предыдущий прогноз сохранён в ленте Mini App.");$("signal-state").className="signal-state";text("signal-symbol","◷");}
+  if(now()-d.data_as_of>(state.session.max_data_age_seconds||90)){text("data-metric","Устарели");$("live-dot").className="live-dot";text("chart-source",`${d.provider} · данные устарели`);text("signal-direction","Нужны свежие данные");$("forecast-quality").hidden=true;$("signal-timing").hidden=true;}
 }
 async function boot(){
   try{
@@ -200,6 +266,10 @@ async function boot(){
   }catch(error){resetMetrics();text("chart-empty-title","Откройте приложение в Telegram");text("chart-empty-text",error.message);text("signal-direction","Требуется вход");text("data-metric","Нет сессии");toast(error.message);}
 }
 setInterval(tick,1000);
-setInterval(async()=>{if(!document.hidden && state.session){if(state.page==="overview"&&!state.loading)await loadMarket();if(!state.session.preview){try{state.watch=await api("/api/watch");renderWatch();}catch{}if(state.page==="history")await loadHistory();}}},60000);
-document.addEventListener("visibilitychange",()=>{if(!document.hidden&&state.session&&!state.loading)loadMarket();});
+setInterval(async()=>{
+  if(document.hidden||!state.session)return;
+  if(state.page==="overview"&&!state.loading&&!state.analyzing)await loadMarket();
+  if(!state.session.preview){try{state.watch=await api("/api/watch");renderWatch();}catch{}await loadHistory();}
+},15000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden&&state.session&&!state.loading&&!state.analyzing){loadMarket();loadHistory();}});
 boot();

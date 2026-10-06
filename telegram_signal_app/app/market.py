@@ -19,6 +19,7 @@ class MarketData:
     def __init__(self, settings: Settings, client: httpx.AsyncClient):
         self.settings, self.client = settings, client
         self.cache: dict[str, tuple[float, list[Candle]]] = {}
+        self.cache_minute: dict[str, int] = {}
         self.errors: dict[str, tuple[float, MarketError]] = {}
         self.locks = {symbol: asyncio.Lock() for symbol in INSTRUMENTS}
 
@@ -27,17 +28,22 @@ class MarketData:
             raise MarketError("unsupported", "Актив не поддерживается. OTC требует отдельного источника Pocket Option.")
         async with self.locks[symbol]:
             cached = self.cache.get(symbol)
-            if cached and time.monotonic() - cached[0] < self.settings.market_cache_seconds:
+            # Refresh on a new UTC minute instead of keeping the previous bar
+            # for an arbitrary 60-second phase after the last user request.
+            if (cached and self.cache_minute.get(symbol) == int(time.time()) // 60
+                    and time.monotonic() - cached[0] < self.settings.market_cache_seconds):
                 return cached[1]
             error = self.errors.get(symbol)
             if error and time.monotonic() - error[0] < 60:
                 raise error[1]
+            requested_minute = int(time.time()) // 60
             try:
                 rows = self.validate(await self._fetch(symbol))
             except MarketError as exc:
                 self.errors[symbol] = (time.monotonic(), exc)
                 raise
             self.cache[symbol] = (time.monotonic(), rows)
+            self.cache_minute[symbol] = requested_minute
             self.errors.pop(symbol, None)
             return rows
 
@@ -59,7 +65,7 @@ class MarketData:
                     payload = older.json() + payload
                 return [Candle(int(row[0]) // 1000, *map(float, row[1:5])) for row in payload]
             if not self.settings.twelve_data_api_key:
-                raise MarketError("missing_key", "Для валютных пар добавьте TWELVE_DATA_API_KEY в .env и перезапустите приложение.")
+                raise MarketError("missing_key", "Для валютных пар добавьте TWELVE_DATA_API_KEY в Railway Variables (локально — в .env) и перезапустите приложение.")
             response = await self.client.get("https://api.twelvedata.com/time_series", params={
                 "symbol": instrument.provider_symbol, "interval": "1min", "outputsize": 1500,
                 "timezone": "UTC", "order": "ASC", "apikey": self.settings.twelve_data_api_key,
