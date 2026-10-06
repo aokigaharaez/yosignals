@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
@@ -11,6 +12,7 @@ from dotenv import load_dotenv
 class Settings:
     bot_token: str = ""
     owner_id: int = 0
+    owner_ids: tuple[int, ...] = ()
     timezone_name: str = "Europe/Simferopol"
     db_path: str = "signals.db"
     webapp_url: str = ""
@@ -29,12 +31,18 @@ class Settings:
     def timezone(self) -> ZoneInfo:
         return ZoneInfo(self.timezone_name)
 
+    @property
+    def bootstrap_owner_ids(self) -> frozenset[int]:
+        return frozenset(i for i in (self.owner_id, *self.owner_ids) if i > 0)
+
 
 def load_settings() -> Settings:
     load_dotenv()
     defaults = Settings()
     values = {}
     for name in defaults.__dataclass_fields__:
+        if name in {"owner_id", "owner_ids"}:
+            continue
         env_name = {"owner_id": "OWNER_TELEGRAM_ID", "timezone_name": "TIMEZONE"}.get(name, name.upper())
         raw = os.getenv(env_name)
         default = getattr(defaults, name)
@@ -46,7 +54,16 @@ def load_settings() -> Settings:
             values[name] = raw.lower() in {"true", "1"}
         else:
             values[name] = type(default)(raw.strip())
-    settings = Settings(**values)
+    owners = []
+    for key in ("OWNER_TELEGRAM_ID", "OWNER_TELEGRAM_IDS"):
+        for item in re.split(r"[,;\s]+", os.getenv(key, "").strip()):
+            if not item:
+                continue
+            if not item.isascii() or not item.isdigit() or not 0 < int(item) < 2**52:
+                raise ValueError(f"{key} must contain positive Telegram user IDs separated by commas")
+            owners.append(int(item))
+    owners = list(dict.fromkeys(owners))
+    settings = Settings(**values, owner_id=owners[0] if owners else 0, owner_ids=tuple(owners))
     ZoneInfo(settings.timezone_name)
     if settings.webapp_url and (urlparse(settings.webapp_url).scheme != "https" or not urlparse(settings.webapp_url).hostname):
         raise ValueError("WEBAPP_URL must be a public HTTPS URL")

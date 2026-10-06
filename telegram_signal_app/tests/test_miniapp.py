@@ -29,8 +29,8 @@ def test_calibration_counts_draws_as_nonwins_and_keeps_bin_boundaries():
     assert p["samples"] == 40 and p["wins"] == 24
     assert p["value"] == round(25 / 42 * 100, 1)
     assert 0 < p["interval"][0] < p["value"] < p["interval"][1] < 100
-    for score in (.50, .70, 1.):
-        fallback = probability_estimate(score, scores, wins, draw_rate=.1)
+    for score in (.50, .60, .70, 1.):
+        fallback = probability_estimate(score, scores[:29], wins[:29], draw_rate=.1)
         assert fallback["method"] == "uncalibrated_model"
         assert fallback["value"] == round(score * .9 * 100, 1)
         assert fallback["interval"] is None

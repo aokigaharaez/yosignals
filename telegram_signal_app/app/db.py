@@ -32,6 +32,11 @@ class Database:
                     expiry INTEGER NOT NULL DEFAULT 3
                 );
                 INSERT OR IGNORE INTO watch_settings(id) VALUES(1);
+                CREATE TABLE IF NOT EXISTS app_owners (
+                    telegram_id INTEGER PRIMARY KEY,
+                    added_by INTEGER NOT NULL,
+                    created_at INTEGER NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS notification_events (
                     run_id INTEGER NOT NULL, event TEXT NOT NULL,
                     PRIMARY KEY(run_id, event)
@@ -113,6 +118,27 @@ class Database:
             cursor = await db.execute("SELECT enabled,symbol,expiry FROM watch_settings WHERE id=1")
             row = await cursor.fetchone()
         return {"enabled": bool(row[0]), "symbol": row[1], "expiry": row[2]}
+
+    async def is_owner(self, telegram_id: int) -> bool:
+        async with aiosqlite.connect(self.path) as db:
+            row = await (await db.execute("SELECT 1 FROM app_owners WHERE telegram_id=?", (telegram_id,))).fetchone()
+        return row is not None
+
+    async def owners(self) -> list[dict]:
+        async with aiosqlite.connect(self.path) as db:
+            rows = await (await db.execute("SELECT telegram_id,added_by,created_at FROM app_owners ORDER BY created_at,telegram_id")).fetchall()
+        return [{"telegram_id": r[0], "added_by": r[1], "created_at": r[2]} for r in rows]
+
+    async def add_owner(self, telegram_id: int, added_by: int) -> None:
+        async with aiosqlite.connect(self.path) as db:
+            await db.execute("INSERT OR IGNORE INTO app_owners VALUES(?,?,?)", (telegram_id, added_by, int(time.time())))
+            await db.commit()
+
+    async def remove_owner(self, telegram_id: int) -> bool:
+        async with aiosqlite.connect(self.path) as db:
+            cursor = await db.execute("DELETE FROM app_owners WHERE telegram_id=?", (telegram_id,))
+            await db.commit()
+            return cursor.rowcount == 1
 
     async def set_watch(self, enabled: bool, symbol: str, expiry: int) -> dict:
         async with aiosqlite.connect(self.path) as db:

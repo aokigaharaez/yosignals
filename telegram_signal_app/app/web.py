@@ -16,9 +16,10 @@ import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from .auth import AuthError, validate_init_data
+from .access import is_owner
 from .config import Settings
 from .db import Database
 from .market import MarketData, MarketError
@@ -45,6 +46,11 @@ class ResultRequest(BaseModel):
     result: Literal["WIN", "LOSS", "DRAW"]
 
 
+class OwnerRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    telegram_id: int = Field(strict=True, gt=0, lt=2**52)
+
+
 def create_app(settings: Settings) -> FastAPI:
     db = Database(settings.db_path)
     requests: dict[str, deque] = defaultdict(deque)
@@ -61,7 +67,7 @@ def create_app(settings: Settings) -> FastAPI:
             app.state.bot_status = "disabled" if not settings.bot_enabled else "not_configured"
             app.state.scheduler = SignalScheduler(settings, db, service)
             tasks = [asyncio.create_task(service.prepare_model()), asyncio.create_task(app.state.scheduler.run())]
-            if settings.bot_enabled and settings.bot_token and settings.owner_id:
+            if settings.bot_enabled and settings.bot_token and settings.bootstrap_owner_ids:
                 app.state.bot_status = "loading"
 
                 async def run_bot():
@@ -86,7 +92,7 @@ def create_app(settings: Settings) -> FastAPI:
 
     app = FastAPI(title="Signal Lab", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
-    def user(request: Request, preview: bool = False) -> dict:
+    async def user(request: Request, preview: bool = False) -> dict:
         auth = request.headers.get("authorization", "")
         if auth:
             try:
@@ -95,8 +101,8 @@ def create_app(settings: Settings) -> FastAPI:
                 value = validate_init_data(auth[4:], settings.bot_token, settings.auth_max_age_seconds)
             except AuthError as exc:
                 raise HTTPException(401, str(exc)) from None
-            if not settings.owner_id or value["id"] != settings.owner_id:
-                raise HTTPException(403, "Это приватное приложение владельца бота.")
+            if not await is_owner(settings, db, value["id"]):
+                raise HTTPException(403, "Нет доступа. Попросите владельца добавить ваш Telegram ID в разделе «Доступ».")
             return value
         # Preview requires both a loopback bind and a loopback peer/Host. No writes or journal.
         loopback = {"127.0.0.1", "::1", "localhost"}
@@ -137,52 +143,52 @@ def create_app(settings: Settings) -> FastAPI:
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "version": "2.0", "delivery": "miniapp"}
+        return {"status": "ok", "version": "2.1", "delivery": "miniapp"}
 
     @app.get("/api/session")
     async def session(request: Request):
-        identity = user(request, preview=True)
-        return {"user": {"first_name": identity.get("first_name", "Трейдер")},
+        identity = await user(request, preview=True)
+        return {"user": {"id": identity["id"], "first_name": identity.get("first_name", "Трейдер")},
                 "preview": bool(identity.get("preview")), "timezone": settings.timezone_name,
                 "server_time": int(time.time()), "bot_ready": app.state.bot_ready,
                 "bot_status": app.state.bot_status, "model_status": app.state.service.model_status,
                 "forex_ready": bool(settings.twelve_data_api_key), "webapp_ready": bool(settings.webapp_url),
                 "min_score": settings.model_min_score * 100, "max_data_age_seconds": settings.max_data_age_seconds,
-                "delivery": "miniapp", "version": "2.0",
+                "delivery": "miniapp", "version": "2.1",
                 "instruments": [asdict(i) for i in INSTRUMENTS.values()], "expiries": EXPIRIES}
 
     @app.get("/api/market")
     async def market(request: Request, symbol: str = "EURUSD", expiry: int = 3):
-        identity = user(request, preview=True)
+        identity = await user(request, preview=True)
         rate_limit(identity)
         return await app.state.service.snapshot(symbol, expiry)
 
     @app.post("/api/analyses")
     async def create_analysis(request: Request, body: AnalysisRequest):
-        rate_limit(user(request))
+        rate_limit(await user(request))
         return await app.state.service.create(body.symbol, body.expiry)
 
     @app.get("/api/history")
     async def history(request: Request):
-        user(request)
+        await user(request)
         return {"items": await db.history(), "stats": await db.stats(), "server_time": int(time.time())}
 
     @app.post("/api/history/{run_id}/result")
     async def result(request: Request, run_id: int, body: ResultRequest):
-        user(request)
+        await user(request)
         if not await db.set_result(run_id, body.result):
             raise HTTPException(409, "Результат уже указан, сигнал отсутствует или ещё не закрыт.")
         return {"ok": True}
 
     @app.get("/api/watch")
     async def watch(request: Request):
-        user(request)
+        await user(request)
         scheduler = app.state.scheduler
         return {**await db.watch(), "error": scheduler.scan_error if scheduler else None}
 
     @app.put("/api/watch")
     async def set_watch(request: Request, body: WatchRequest):
-        rate_limit(user(request))
+        rate_limit(await user(request))
         if body.symbol not in INSTRUMENTS:
             raise HTTPException(422, "Неизвестный актив. OTC недоступен.")
         if body.enabled:
@@ -191,6 +197,36 @@ def create_app(settings: Settings) -> FastAPI:
                 raise HTTPException(409, "Нет свежих данных для автоанализа.")
         app.state.scheduler.scan_error = None
         return await db.set_watch(body.enabled, body.symbol, body.expiry)
+
+    @app.get("/api/owners")
+    async def owners(request: Request):
+        identity = await user(request)
+        members = {row["telegram_id"]: {**row, "source": "miniapp"} for row in await db.owners()}
+        for owner_id in settings.bootstrap_owner_ids:
+            members[owner_id] = {"telegram_id": owner_id, "source": "environment", "added_by": None, "created_at": None}
+        return {"current_user_id": identity["id"], "items": [
+            {**row, "can_remove": row["source"] != "environment" and row["telegram_id"] != identity["id"]}
+            for row in sorted(members.values(), key=lambda r: r["telegram_id"])]}
+
+    @app.post("/api/owners")
+    async def add_owner(request: Request, body: OwnerRequest):
+        identity = await user(request)
+        rate_limit(identity)
+        if body.telegram_id not in settings.bootstrap_owner_ids:
+            await db.add_owner(body.telegram_id, identity["id"])
+        return {"ok": True}
+
+    @app.delete("/api/owners/{telegram_id}")
+    async def remove_owner(request: Request, telegram_id: int):
+        identity = await user(request)
+        rate_limit(identity)
+        if telegram_id in settings.bootstrap_owner_ids:
+            raise HTTPException(409, "Этот владелец задан в Railway Variables. Измените список там и перезапустите сервер.")
+        if telegram_id == identity["id"]:
+            raise HTTPException(409, "Нельзя отозвать собственный доступ в текущей сессии.")
+        if not await db.remove_owner(telegram_id):
+            raise HTTPException(404, "Владелец уже удалён или не найден.")
+        return {"ok": True}
 
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
 

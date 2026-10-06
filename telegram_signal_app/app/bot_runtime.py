@@ -4,7 +4,7 @@ import logging
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
-from aiogram.types import MenuButtonWebApp, WebAppInfo
+from aiogram.types import BotCommand, MenuButtonWebApp, WebAppInfo
 
 from .handlers import build_router
 
@@ -16,8 +16,12 @@ async def run(app, settings, db, service):
     try:
         bot = Bot(settings.bot_token, default=DefaultBotProperties(parse_mode="HTML"))
         dp = Dispatcher()
-        dp.include_router(build_router(settings))
+        dp.include_router(build_router(settings, db))
         await bot.get_me()
+        await bot.set_my_commands([
+            BotCommand(command="start", description="Открыть Mini App или узнать свой Telegram ID"),
+            BotCommand(command="app", description="Анализы, сигналы и доступ в Mini App"),
+        ])
         if settings.webapp_url:
             await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(
                 text="Signal Lab", web_app=WebAppInfo(url=settings.webapp_url)))

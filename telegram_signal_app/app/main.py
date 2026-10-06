@@ -1,5 +1,4 @@
 import logging
-import os
 
 
 def main():
@@ -23,10 +22,10 @@ def main():
     from .web import create_app
 
     # Railway передаёт порт через переменную окружения PORT
-    port = int(os.environ.get("PORT", settings.port))
+    port = settings.port
 
-    # На Railway обязательно слушать 0.0.0.0
-    host = "0.0.0.0"
+    # Railway задаёт HOST=0.0.0.0; локальный просмотр остаётся на loopback.
+    host = settings.host
 
     print(f"[3/3] Starting http://{host}:{port}", flush=True)
 
@@ -34,8 +33,7 @@ def main():
         create_app(settings),
         host=host,
         port=port,
-        proxy_headers=True,
-        forwarded_allow_ips="*",
+        proxy_headers=False,
     )
 
 

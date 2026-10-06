@@ -22,10 +22,11 @@ async function api(path, options={}) {
 }
 function page(name) {
   state.page=name;
-  for(const key of ["overview","history","connections"]) $(`${key}-page`).hidden=key!==name;
+  for(const key of ["overview","history","connections","access"]) $(`${key}-page`).hidden=key!==name;
   document.querySelectorAll(".nav-button").forEach(b=>b.classList.toggle("active",b.dataset.page===name));
-  text("page-title",{overview:"Обзор рынка",history:"История сигналов",connections:"Подключения"}[name]);
+  text("page-title",{overview:"Обзор рынка",history:"Сигналы и история",connections:"Подключения",access:"Доступ"}[name]);
   if(name==="history") loadHistory();
+  if(name==="access") loadOwners();
   if(name==="overview") requestAnimationFrame(drawChart);
   window.scrollTo({top:0,behavior:"instant"});
 }
@@ -233,6 +234,43 @@ async function loadHistory() {
   }catch(error){toast(error.message);}finally{state.historyLoading=false;}
 }
 $("history-refresh").addEventListener("click",loadHistory);
+let ownersLoading=false;
+async function loadOwners() {
+  if(!state.session)return;
+  const preview=state.session.preview;
+  $("owner-form").hidden=preview;$("access-preview").hidden=!preview;
+  text("current-user-id",preview?"Откройте Telegram":state.session.user.id);
+  if(preview){$("owners-list").replaceChildren(node("p","","Список владельцев доступен в Telegram Mini App."));return;}
+  if(ownersLoading)return;ownersLoading=true;
+  try {
+    const data=await api("/api/owners");
+    $("owners-list").replaceChildren(...data.items.map(owner=>{
+      const row=node("article","owner-row"),info=node("div");
+      info.append(node("strong","",String(owner.telegram_id)+(owner.telegram_id===data.current_user_id?" · вы":"")));
+      info.append(node("small","",owner.source==="environment"?"Закреплён в настройках сервера":"Добавлен через Mini App"));
+      row.append(info);
+      if(owner.can_remove){
+        const button=node("button","text-button remove-owner","Отозвать доступ");
+        button.addEventListener("click",async()=>{
+          button.disabled=true;
+          try{await api(`/api/owners/${owner.telegram_id}`,{method:"DELETE"});toast(`Доступ для ${owner.telegram_id} отозван.`);await loadOwners();}
+          catch(error){toast(error.message);button.disabled=false;}
+        });row.append(button);
+      }
+      return row;
+    }));
+  }catch(error){$("owners-list").replaceChildren(node("p","",error.message));}finally{ownersLoading=false;}
+}
+$("owners-refresh").addEventListener("click",loadOwners);
+$("owner-form").addEventListener("submit",async(event)=>{
+  event.preventDefault();
+  if(!state.session||state.session.preview)return;
+  const raw=$("owner-id").value.trim(),telegram_id=Number(raw);
+  if(!/^[1-9][0-9]*$/.test(raw)||!Number.isSafeInteger(telegram_id)||telegram_id>=2**52){toast("Введите корректный числовой Telegram ID.");return;}
+  const button=$("owner-add");if(button.disabled)return;button.disabled=true;
+  try{await api("/api/owners",{method:"POST",body:JSON.stringify({telegram_id})});$("owner-form").reset();toast(`Владелец ${telegram_id} добавлен. Теперь он может открыть Mini App через бота.`);await loadOwners();}
+  catch(error){toast(error.message);}finally{button.disabled=false;}
+});
 function tick(){
   text("clock",`${clockTime(now())} · ${state.session?.timezone||"UTC+3"}`);
   for(const r of state.history){
@@ -256,7 +294,7 @@ async function boot(){
   try{
     state.session=await api("/api/session");state.offset=state.session.server_time-Date.now()/1000;
     text("user-name",state.session.user.first_name);text("avatar",state.session.user.first_name.charAt(0).toUpperCase());
-    text("session-mode",state.session.preview?"Локальный просмотр":"Приватный терминал");text("environment",state.session.preview?"LOCAL PREVIEW":"TELEGRAM MINI APP");
+    text("session-mode",state.session.preview?"Локальный просмотр":"Терминал владельцев");text("environment",(state.session.preview?"PREVIEW":"MINI APP")+" · v"+state.session.version);
     $("preview-notice").hidden=!state.session.preview;
     text("forex-status",state.session.forex_ready?"Ключ настроен · доступ проверяется при запросе":"Ожидает API-ключ");$("forex-status").classList.toggle("ready",state.session.forex_ready);
     text("telegram-status",state.session.bot_ready?(state.session.webapp_ready?"Бот и адрес настроены":"Бот подключён · нужен HTTPS-адрес"):(state.session.bot_status==="loading"?"Бот запускается в фоне":"Нужно подключить бота"));$("telegram-status").classList.toggle("ready",state.session.bot_ready&&state.session.webapp_ready);
