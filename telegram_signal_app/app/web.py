@@ -152,7 +152,7 @@ def create_app(settings: Settings) -> FastAPI:
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "version": "2.2", "delivery": "miniapp"}
+        return {"status": "ok", "version": "2.3", "delivery": "miniapp"}
 
     @app.get("/api/session")
     async def session(request: Request):
@@ -163,7 +163,7 @@ def create_app(settings: Settings) -> FastAPI:
                 "bot_status": app.state.bot_status, "model_status": app.state.service.model_status,
                 "forex_ready": bool(settings.twelve_data_api_key), "webapp_ready": bool(settings.webapp_url),
                 "min_score": settings.model_min_score * 100, "max_data_age_seconds": settings.max_data_age_seconds,
-                "delivery": "miniapp", "version": "2.2",
+                "delivery": "miniapp", "version": "2.3",
                 "instruments": [asdict(i) for i in INSTRUMENTS.values()], "expiries": EXPIRIES}
 
     @app.get("/api/market")
