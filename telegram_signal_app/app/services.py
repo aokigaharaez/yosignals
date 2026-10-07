@@ -30,7 +30,7 @@ class SignalService:
             self.model_status = "error"
             logging.getLogger(__name__).error("Cannot load ML libraries. Install requirements.txt and restart.")
 
-    async def snapshot(self, symbol: str, expiry: int) -> dict:
+    async def snapshot(self, symbol: str, expiry: int, ml: bool = True) -> dict:
         if expiry not in EXPIRIES:
             raise MarketError("unsupported_expiry", "Выберите экспирацию 1, 3, 5 или 15 минут.")
         candles = await self.market.candles(symbol)
@@ -46,7 +46,7 @@ class SignalService:
                 now = int(time.time())
                 lead = max(1, math.ceil((now + 10 - data_as_of) / 60))
                 entry = data_as_of + lead * 60
-                if now - data_as_of > self.settings.max_data_age_seconds or self.analyzer is None:
+                if not ml or now - data_as_of > self.settings.max_data_age_seconds or self.analyzer is None:
                     break
                 key = symbol, expiry, lead
                 cached = self.cache.get(key)
@@ -75,6 +75,26 @@ class SignalService:
                       price_note="Внешние котировки. Сверьте актив и цену в Pocket Option; OTC не поддерживается.",
                       score_note="Оценка успеха направления на внешнем рынке. Вероятность выигрыша в Pocket Option не проверена.")
         return result
+
+    async def create_gpt(self, symbol, expiry, model, user_id, gpt):
+        snapshot = await self.snapshot(symbol, expiry, ml=False)
+        # Reserve time for the API before the scheduled entry; never shift a completed forecast.
+        snapshot["entry_at"] = math.ceil((int(time.time()) + 90) / 60) * 60
+        snapshot["close_at"] = snapshot["entry_at"] + expiry * 60
+        snapshot["entry_delay"] = (snapshot["entry_at"] - snapshot["data_as_of"]) // 60
+        review = await gpt.review(snapshot, model, user_id, signal=True)
+        now = int(time.time())
+        prediction = review["prediction"]
+        snapshot.update(engine="gpt", model=model, model_ready=True, direction=prediction["direction"],
+                        reasons=[prediction["summary"], *prediction["risks"]],
+                        probability=None, score=None, validation=None, quality="unvalidated",
+                        server_time=now, status="scheduled" if prediction["direction"] != "WAIT" else "unavailable",
+                        score_note="Для GPT-прогноза вероятность выигрыша не откалибрована.")
+        if now - snapshot["data_as_of"] > self.settings.max_data_age_seconds or snapshot["entry_at"] - now < 10:
+            snapshot.update(direction="WAIT", status="unavailable", quality="unavailable",
+                            reasons=["GPT завершил расчёт после безопасного времени входа или данные устарели. Запросите новый анализ.", *snapshot["reasons"]])
+        saved = await self.db.save({k: v for k, v in snapshot.items() if k != "candles"})
+        return {**saved, "candles": snapshot["candles"], "server_time": now}
 
     async def create(self, symbol: str, expiry: int) -> dict:
         result = await self.snapshot(symbol, expiry)

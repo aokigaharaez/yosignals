@@ -94,3 +94,83 @@ async def test_gpt_blocks_concurrent_requests():
         release.set()
         with pytest.raises(GPTError):
             await first
+
+@pytest.mark.asyncio
+async def test_gpt_independent_prediction_and_engine_journal(tmp_path):
+    from app.db import Database
+    from app.services import SignalService
+    db = Database(str(tmp_path / 'signals.db'))
+    await db.init()
+    base = {**SNAPSHOT, 'label': 'BTC/USDT', 'provider': 'Binance',
+            'candle_time': int(time.time()) - 60, 'entry_at': int(time.time()) + 180,
+            'close_at': int(time.time()) + 360, 'indicators': {}, 'model': 'ML',
+            'direction': 'PUT', 'probability': {'value': 90}}
+    def respond(request):
+        payload = json.loads(request.content)
+        context = json.loads(payload['input'])
+        assert 'direction' not in context and 'probability' not in context and 'model' not in context
+        assert payload['text']['format']['type'] == 'json_schema'
+        return httpx.Response(200, json={'status':'completed', 'output':[
+            {'type':'message','role':'assistant','content':[{'type':'output_text',
+            'text':json.dumps({'direction':'CALL','summary':'Рост по свечам','risks':['Волатильность']})}]}]})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        service = SignalService(Settings(), None, db)
+        async def snapshot(symbol, expiry, ml=True):
+            assert ml is False
+            return dict(base)
+        service.snapshot = snapshot
+        result = await service.create_gpt('BTCUSDT', 3, 'gpt-6-luna', 42,
+                                         GPTReview(Settings(openai_api_key='secret'), client))
+        assert result['direction'] == 'CALL' and result['engine'] == 'gpt'
+        assert result['probability'] is None and result['validation'] is None
+        ml_result = await db.save({**result, 'engine':'ml', 'direction':'PUT', 'model':'ML'})
+        assert ml_result['id'] != result['id']
+        assert (await db.get(result['id']))['direction'] == 'CALL'
+        await db.init()
+        assert len(await db.history()) == 2
+
+
+@pytest.mark.asyncio
+async def test_gpt_late_prediction_becomes_wait(tmp_path):
+    from app.db import Database
+    from app.services import SignalService
+    db = Database(str(tmp_path / 'late.db'))
+    await db.init()
+    service = SignalService(Settings(), None, db)
+    base = {**SNAPSHOT, 'candle_time': 100, 'data_as_of':int(time.time()),
+            'entry_at':int(time.time())+180, 'close_at':int(time.time())+360}
+    async def snapshot(symbol, expiry, ml=True): return dict(base)
+    class SlowGPT:
+        async def review(self, data, model, user_id, signal=False):
+            data['data_as_of'] = int(time.time()) - 200
+            return {'prediction':{'direction':'PUT','summary':'Снижение','risks':[]}}
+    service.snapshot = snapshot
+    result = await service.create_gpt('BTCUSDT', 3, 'gpt-6-luna', 42, SlowGPT())
+    assert result['direction'] == 'WAIT'
+    assert result['probability'] is None
+
+@pytest.mark.asyncio
+async def test_existing_journal_migration_preserves_ids_results_and_owners(tmp_path):
+    import aiosqlite
+    from app.db import Database
+    path = str(tmp_path / 'old.db')
+    payload = {**SNAPSHOT, 'candle_time':100, 'entry_at':200, 'close_at':300}
+    async with aiosqlite.connect(path) as conn:
+        await conn.execute('''CREATE TABLE analysis_runs_v2 (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, symbol TEXT, expiry INTEGER, candle_time INTEGER,
+            direction TEXT, entry_at INTEGER, close_at INTEGER, created_at INTEGER,
+            payload TEXT, result TEXT, result_source TEXT,
+            UNIQUE(symbol,expiry,candle_time,entry_at))''')
+        await conn.execute('INSERT INTO analysis_runs_v2 VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+            (9,'BTCUSDT',3,100,'CALL',200,300,150,json.dumps(payload),'WIN','user_reported'))
+        await conn.commit()
+    db = Database(path)
+    await db.init()
+    record = await db.get(9)
+    assert record['result'] == 'WIN'
+    await db.add_owner(42, 43)
+    new = await db.save({**payload, 'direction':'PUT', 'engine':'gpt', 'model':'gpt-6-luna'})
+    assert new['id'] > 9
+    await db.init()
+    assert (await db.get(9))['result'] == 'WIN'
+    assert await db.is_owner(42)

@@ -38,6 +38,11 @@ class AnalysisRequest(BaseModel):
     expiry: Literal[1, 3, 5, 15] = 3
 
 
+class SignalRequest(AnalysisRequest):
+    engine: Literal["ml", "gpt"] = "ml"
+    model: Literal["gpt-6.1-sol", "gpt-6-luna", "gpt-6-astra"] = "gpt-6.1-sol"
+
+
 class WatchRequest(AnalysisRequest):
     enabled: bool
 
@@ -162,7 +167,7 @@ def create_app(settings: Settings) -> FastAPI:
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "version": "2.5", "delivery": "miniapp"}
+        return {"status": "ok", "version": "2.6", "delivery": "miniapp"}
 
     @app.get("/api/session")
     async def session(request: Request):
@@ -173,7 +178,7 @@ def create_app(settings: Settings) -> FastAPI:
                 "bot_status": app.state.bot_status, "model_status": app.state.service.model_status,
                 "forex_ready": bool(settings.twelve_data_api_key), "webapp_ready": bool(settings.webapp_url),
                 "min_score": settings.model_min_score * 100, "max_data_age_seconds": settings.max_data_age_seconds,
-                "delivery": "miniapp", "version": "2.5",
+                "delivery": "miniapp", "version": "2.6",
                 "gpt_ready": bool(settings.openai_api_key),
                 "gpt_models": [{"id": k, "label": v} for k, v in MODELS.items()],
                 "instruments": [asdict(i) for i in INSTRUMENTS.values()], "expiries": EXPIRIES}
@@ -185,8 +190,13 @@ def create_app(settings: Settings) -> FastAPI:
         return await app.state.service.snapshot(symbol, expiry)
 
     @app.post("/api/analyses")
-    async def create_analysis(request: Request, body: AnalysisRequest):
-        rate_limit(await user(request))
+    async def create_analysis(request: Request, body: SignalRequest):
+        identity = await user(request)
+        rate_limit(identity)
+        if body.engine == "gpt":
+            if not settings.openai_api_key:
+                raise GPTError("missing_openai_key", "Добавьте OPENAI_API_KEY в Railway Variables.")
+            return await app.state.service.create_gpt(body.symbol, body.expiry, body.model, identity["id"], app.state.gpt)
         return await app.state.service.create(body.symbol, body.expiry)
 
     @app.post("/api/gpt/review")

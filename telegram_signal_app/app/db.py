@@ -47,17 +47,36 @@ class Database:
                 await db.execute("INSERT INTO analysis_runs_v2 SELECT * FROM analysis_runs")
             await db.commit()
 
+            columns = await (await db.execute("PRAGMA table_info(analysis_runs_v2)")).fetchall()
+            if "engine_key" not in {row[1] for row in columns}:
+                await db.executescript("""
+                    BEGIN IMMEDIATE;
+                    ALTER TABLE analysis_runs_v2 RENAME TO analysis_runs_engine_migration;
+                    CREATE TABLE analysis_runs_v2 (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        symbol TEXT NOT NULL, expiry INTEGER NOT NULL, candle_time INTEGER NOT NULL,
+                        direction TEXT NOT NULL, entry_at INTEGER NOT NULL, close_at INTEGER NOT NULL,
+                        created_at INTEGER NOT NULL, payload TEXT NOT NULL,
+                        result TEXT, result_source TEXT, engine_key TEXT NOT NULL DEFAULT 'ml',
+                        UNIQUE(symbol, expiry, candle_time, entry_at, engine_key)
+                    );
+                    INSERT INTO analysis_runs_v2 SELECT *, 'ml' FROM analysis_runs_engine_migration;
+                    DROP TABLE analysis_runs_engine_migration;
+                    COMMIT;
+                """)
+
     async def save(self, payload: dict) -> dict:
+        engine_key = payload.get("model", "gpt") if payload.get("engine") == "gpt" else "ml"
         async with aiosqlite.connect(self.path) as db:
             await db.execute("""
                 INSERT OR IGNORE INTO analysis_runs_v2
-                (symbol, expiry, candle_time, direction, entry_at, close_at, created_at, payload)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (symbol, expiry, candle_time, direction, entry_at, close_at, created_at, payload, engine_key)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (payload["symbol"], payload["expiry"], payload["candle_time"], payload["direction"],
-                  payload["entry_at"], payload["close_at"], int(time.time()), json.dumps(payload, ensure_ascii=False, allow_nan=False)))
+                  payload["entry_at"], payload["close_at"], int(time.time()), json.dumps(payload, ensure_ascii=False, allow_nan=False), engine_key))
             await db.commit()
-            cursor = await db.execute("SELECT * FROM analysis_runs_v2 WHERE symbol=? AND expiry=? AND candle_time=? AND entry_at=?",
-                                      (payload["symbol"], payload["expiry"], payload["candle_time"], payload["entry_at"]))
+            cursor = await db.execute("SELECT * FROM analysis_runs_v2 WHERE symbol=? AND expiry=? AND candle_time=? AND entry_at=? AND engine_key=?",
+                                      (payload["symbol"], payload["expiry"], payload["candle_time"], payload["entry_at"], engine_key))
             row = await cursor.fetchone()
         return self._record(row)
 

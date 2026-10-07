@@ -25,7 +25,7 @@ class GPTReview:
         self.lock = asyncio.Lock()
         self.last_request = {}
 
-    async def review(self, snapshot, model, user_id):
+    async def review(self, snapshot, model, user_id, signal=False):
         if model not in MODELS:
             raise GPTError("unsupported_model", "Выберите модель из списка.", 422)
         if not self.settings.openai_api_key:
@@ -41,6 +41,24 @@ class GPTReview:
             self.last_request[user_id] = now
             context = {k: v for k, v in snapshot.items() if k not in {"candles"}}
             context["candles"] = snapshot.get("candles", [])[-30:]
+            extra = {}
+            if signal:
+                for field in ("direction", "score", "probability", "quality", "validation", "reasons", "model", "model_ready", "status"):
+                    context.pop(field, None)
+                extra = {"text": {"format": {"type": "json_schema", "name": "market_signal", "strict": True,
+                    "schema": {"type": "object", "properties": {
+                        "direction": {"type": "string", "enum": ["CALL", "PUT", "WAIT"]},
+                        "summary": {"type": "string"},
+                        "risks": {"type": "array", "items": {"type": "string"}}},
+                        "required": ["direction", "summary", "risks"], "additionalProperties": False}}}}
+            signal_instructions = (
+                "Ты анализируешь рынок самостоятельно по предоставленным свечам и индикаторам. "
+                "Ответ на русском в заданном JSON. Выбери направление CALL (вверх), PUT (вниз) "
+                "или WAIT (пропустить) для заданной экспирации и серверного времени входа. "
+                "Объясни выбор в summary, перечисли риски в risks. При противоречиях или недостатке "
+                "данных выбирай WAIT. Не выдумывай новости, цены, точность или вероятность выигрыша. "
+                "Источник внешний, цены Pocket Option могут отличаться; OTC не поддерживается."
+            )
             try:
                 response = await self.client.post(
                     "https://api.openai.com/v1/responses",
@@ -48,7 +66,8 @@ class GPTReview:
                     timeout=75,
                     json={"model": model, "store": False, "max_output_tokens": 2200,
                           "reasoning": {"effort": "low"},
-                          "instructions": (
+                          **extra,
+                          "instructions": signal_instructions if signal else (
                               "Ты аналитический помощник. Ответ на русском, до 250 слов. "
                               "Разбери только предоставленный сервером снимок внешнего рынка: тренд, "
                               "импульс, волатильность, аргументы за и против текущего ML-прогноза. "
@@ -83,8 +102,20 @@ class GPTReview:
             except (ValueError, TypeError, KeyError, AttributeError):
                 raise GPTError("gpt_empty", "OpenAI не завершил разбор. Попробуйте другую модель или повторите позже.") from None
             generated_at = int(time.time())
-            return {"text": text, "model": model, "symbol": snapshot["symbol"],
+            result = {"text": text, "model": model, "symbol": snapshot["symbol"],
                     "expiry": snapshot["expiry"], "data_as_of": snapshot["data_as_of"],
                     "generated_at": generated_at,
                     "stale": generated_at - snapshot["data_as_of"] > self.settings.max_data_age_seconds,
                     "entry_expired": generated_at >= snapshot.get("entry_at", 0)}
+            if signal:
+                try:
+                    prediction = json.loads(text)
+                    if (prediction["direction"] not in {"CALL", "PUT", "WAIT"}
+                            or not isinstance(prediction["summary"], str) or not prediction["summary"].strip()
+                            or not isinstance(prediction["risks"], list)
+                            or not all(isinstance(r, str) for r in prediction["risks"])):
+                        raise ValueError("Invalid prediction")
+                except (ValueError, KeyError, TypeError):
+                    raise GPTError("gpt_invalid_signal", "GPT вернул некорректный прогноз. Повторите позже.") from None
+                result["prediction"] = prediction
+            return result

@@ -226,6 +226,15 @@ def test_gpt_endpoint_uses_server_snapshot_and_authenticated_owner(tmp_path):
                            json={"symbol": "BTCUSDT", "model": "unknown"}).status_code == 422
         assert len(calls) == 1
         assert "test-secret" not in client.get("/api/session", headers=auth).text
+        signal_calls = []
+        async def create_gpt(symbol, expiry, model, user_id, gpt):
+            signal_calls.append((symbol, expiry, model, user_id))
+            return {"id": 1, "direction": "CALL", "engine": "gpt", "model": model}
+        app.state.service.create_gpt = create_gpt
+        response = client.post("/api/analyses", headers=auth,
+                               json={"symbol": "BTCUSDT", "expiry": 3, "engine": "gpt", "model": "gpt-6-luna"})
+        assert response.status_code == 200 and response.json()["engine"] == "gpt"
+        assert signal_calls == [("BTCUSDT", 3, "gpt-6-luna", 42)]
 
 
 def test_remote_requests_never_gain_preview_access(app):

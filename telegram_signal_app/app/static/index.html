@@ -49,7 +49,10 @@
         <div class="chart-wrap"><canvas id="market-chart" aria-label="График реальных рыночных свечей" role="img"></canvas><div class="chart-empty" id="chart-empty"><span class="empty-symbol"><svg><use href="#i-chart"/></svg></span><strong id="chart-empty-title">Подключаем рынок</strong><p id="chart-empty-text">Получаем минутные свечи от поставщика данных.</p><button class="text-button" id="chart-retry" hidden>Повторить запрос ↗</button></div></div>
         <div class="chart-footer"><span><span class="live-dot" id="live-dot"></span><span id="chart-source">Ожидание данных</span></span><span id="chart-update">—</span></div>
       </section>
-      <section class="panel signal-panel"><div class="panel-heading"><div class="section-title"><svg class="accent-icon"><use href="#i-spark"/></svg><h2>ИИ-анализ</h2></div><span class="ai-badge">ML MODEL</span></div><p class="panel-description">Сначала данные. Затем сигнал.</p>
+      <section class="panel signal-panel"><div class="panel-heading"><div class="section-title"><svg class="accent-icon"><use href="#i-spark"/></svg><h2>ИИ-анализ</h2></div><span class="ai-badge" id="engine-badge">ML MODEL</span></div><p class="panel-description">Сначала данные. Затем сигнал.</p>
+        <label class="field-label" for="analysis-engine">Модель анализа</label>
+        <select id="analysis-engine"><option value="ml">ML Model</option><option value="gpt">GPT</option></select>
+        <div id="gpt-controls" hidden><label class="field-label" for="gpt-model">Модель GPT</label><select id="gpt-model"></select><p id="gpt-status"></p><small>Каждый анализ оплачивается через OpenAI API. Вероятность GPT-прогноза пока не проверена на истории.</small></div>
         <label class="field-label">Экспирация</label><div class="expiry-options" id="expiry-options"><button data-expiry="1">1 мин</button><button data-expiry="3" class="active">3 мин</button><button data-expiry="5">5 мин</button><button data-expiry="15">15 мин</button></div>
         <div class="signal-state" id="signal-state"><div class="signal-symbol" id="signal-symbol">∿</div><span class="mini-label">НАПРАВЛЕНИЕ ПРОГНОЗА</span><h3 id="signal-direction">Ожидание данных</h3><p id="signal-summary">Анализ появится после получения рыночных свечей.</p></div>
         <div class="forecast-quality" id="forecast-quality" hidden><span class="quality-badge" id="quality-badge">Предварительный</span><details><summary>Шанс выигрыша · <strong id="chance-value">—</strong></summary><p id="chance-note"></p><p id="chance-interval"></p><small>Оценка успеха направления по внешним котировкам. Реальный шанс выигрыша в Pocket Option не проверен; выплата и исполнение брокера не учтены.</small></details></div>
@@ -61,15 +64,6 @@
       <section class="method-card"><span class="method-icon">✳</span><div><h3>Прозрачный анализ</h3><p>Направление, шанс по модели и проверка качества видны отдельно.</p><button data-page="connections" class="text-button">Как это работает <span>↗</span></button></div></section>
     </div>
     <section class="panel recent-panel"><div class="panel-heading"><div class="section-title"><svg><use href="#i-clock"/></svg><h2>Сигналы в Mini App</h2></div><button data-page="history" class="text-button">Вся история ↗</button></div><div id="recent-list" class="recent-content"><div class="empty-inline">Нажмите «Получить сигнал»: здесь появятся направление, шанс по модели и время входа.</div></div></section>
-    <section class="panel connection-card gpt-panel" aria-label="Дополнительный GPT-разбор">
-      <div class="panel-heading"><h2>GPT-разбор рынка</h2><span class="connection-status" id="gpt-status">Проверка подключения</span></div>
-      <p>Дополнительный разбор свечей, индикаторов и текущего ML-прогноза. Запрос оплачивается из вашего OpenAI API-баланса.</p>
-      <label class="field-label" for="gpt-model">Модель GPT</label>
-      <select id="gpt-model" aria-label="Модель GPT"></select>
-      <p id="gpt-help">Добавьте OPENAI_API_KEY в Railway Variables и перезапустите приложение. Ключ хранится на сервере. Доступность моделей зависит от API-проекта.</p>
-      <button class="button secondary" id="gpt-button" disabled>Разобрать рынок с GPT</button>
-      <p id="gpt-meta"></p><div id="gpt-result" class="gpt-result" role="status" aria-live="polite">Выберите модель и запросите разбор.</div>
-    </section>
     <footer>Signal Lab <span>·</span> Аналитический инструмент, не гарантия дохода. Котировки могут отличаться от Pocket Option.</footer>
   </div>
   <div class="page" id="history-page" hidden><section class="page-heading"><div><div class="eyebrow">ВАШ ТОРГОВЫЙ ЖУРНАЛ</div><h1>Сигналы и история<span>.</span></h1><p>Результаты отмечаются по фактической сделке в Pocket Option.</p></div></section><div class="history-stats" id="history-stats"></div><section class="panel"><div class="panel-heading"><h2>Анализы и результаты</h2><button id="history-refresh" class="text-button">Обновить ↻</button></div><div id="history-list"></div></section><p class="footnote">WIN / LOSS / DRAW — ваши отметки, не автоматическая проверка брокера. Старые ручные сигналы сохранены в прежней таблице базы.</p></div>
