@@ -19,7 +19,8 @@ def validate_init_data(raw: str, bot_token: str, max_age: int, now: int | None =
             raise ValueError("Duplicate fields")
         supplied = data.pop("hash")
         check = "\n".join(f"{key}={value}" for key, value in sorted(data.items()))
-        secret = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
+        # Telegram Web Apps: HMAC key is the bot token, message is WebAppData.
+        secret = hmac.new(bot_token.encode(), b"WebAppData", hashlib.sha256).digest()
         expected = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(supplied, expected):
             raise ValueError("Invalid signature")

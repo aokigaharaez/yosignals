@@ -28,7 +28,7 @@ TOKEN = "123456:TEST_TOKEN_NOT_REAL"
 def signed(user=42, timestamp=None, **extra):
     data = {"auth_date": str(int(time.time()) if timestamp is None else timestamp),
             "user": json.dumps({"id": user, "first_name": "Tester"}), **extra}
-    secret = hmac.new(b"WebAppData", TOKEN.encode(), hashlib.sha256).digest()
+    secret = hmac.new(TOKEN.encode(), b"WebAppData", hashlib.sha256).digest()
     check = "\n".join(f"{k}={v}" for k, v in sorted(data.items()))
     data["hash"] = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
     return urlencode(data)
