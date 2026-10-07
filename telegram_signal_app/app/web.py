@@ -141,9 +141,18 @@ def create_app(settings: Settings) -> FastAPI:
     async def market_error(request: Request, exc: MarketError):
         return JSONResponse(status_code=503, content={"code": exc.code, "detail": exc.message})
 
+    @app.exception_handler(Exception)
+    async def unexpected_error(request: Request, exc: Exception):
+        # Keep internal details out of Telegram responses, but leave a traceback in Railway logs.
+        log.exception("Unhandled request error: %s %s", request.method, request.url.path)
+        return JSONResponse(status_code=500, content={
+            "code": "internal_error",
+            "detail": "Внутренняя ошибка сервера. Повторите запрос; если ошибка повторяется, проверьте логи Railway.",
+        })
+
     @app.get("/health")
     async def health():
-        return {"status": "ok", "version": "2.1", "delivery": "miniapp"}
+        return {"status": "ok", "version": "2.2", "delivery": "miniapp"}
 
     @app.get("/api/session")
     async def session(request: Request):
@@ -154,7 +163,7 @@ def create_app(settings: Settings) -> FastAPI:
                 "bot_status": app.state.bot_status, "model_status": app.state.service.model_status,
                 "forex_ready": bool(settings.twelve_data_api_key), "webapp_ready": bool(settings.webapp_url),
                 "min_score": settings.model_min_score * 100, "max_data_age_seconds": settings.max_data_age_seconds,
-                "delivery": "miniapp", "version": "2.1",
+                "delivery": "miniapp", "version": "2.2",
                 "instruments": [asdict(i) for i in INSTRUMENTS.values()], "expiries": EXPIRIES}
 
     @app.get("/api/market")
@@ -214,7 +223,7 @@ def create_app(settings: Settings) -> FastAPI:
         rate_limit(identity)
         if body.telegram_id not in settings.bootstrap_owner_ids:
             await db.add_owner(body.telegram_id, identity["id"])
-        return {"ok": True}
+        return {"ok": True, "telegram_id": body.telegram_id}
 
     @app.delete("/api/owners/{telegram_id}")
     async def remove_owner(request: Request, telegram_id: int):

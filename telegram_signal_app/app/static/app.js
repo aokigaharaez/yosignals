@@ -3,6 +3,14 @@ const $ = id => document.getElementById(id);
 const state = {session:null, symbol:"EURUSD", expiry:3, category:"forex", chart:"candles", snapshot:null, sequence:0, loading:false, analyzing:false, watch:null, offset:0, page:"overview", history:[], historyLoaded:false, seenId:0, events:new Set(), historyLoading:false};
 const tg = window.Telegram?.WebApp;
 if (tg?.initData) { tg.ready(); tg.expand(); tg.setHeaderColor?.("#f5f7f9"); tg.setBackgroundColor?.("#f5f7f9"); }
+function telegramInitData() {
+  const direct = tg?.initData?.trim();
+  if (direct) return direct;
+  // Telegram can expose the raw value in the launch URL before the SDK finishes booting.
+  const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
+  const query = new URLSearchParams(`${window.location.search.slice(1)}&${hash}`);
+  return query.get("tgWebAppData") || "";
+}
 const now = () => Date.now()/1000 + state.offset;
 const text = (id, value) => { $(id).textContent = value; };
 const price = value => value == null ? "—" : new Intl.NumberFormat("en-US", {minimumFractionDigits: value > 100 ? 2 : 5, maximumFractionDigits:value > 100 ? 2 : 5}).format(value);
@@ -10,11 +18,13 @@ const clockTime = value => new Date(value*1000).toLocaleTimeString("ru-RU", {tim
 let toastTimer;
 function toast(message) { text("toast",message); $("toast").hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>$("toast").hidden=true,6500); }
 async function api(path, options={}) {
-  const headers={...(options.body ? {"Content-Type":"application/json"} : {}), ...(tg?.initData ? {Authorization:`tma ${tg.initData}`} : {})};
+  const initData = telegramInitData();
+  const headers={...(options.body ? {"Content-Type":"application/json"} : {}), ...(initData ? {Authorization:`tma ${initData}`} : {})};
   const controller=new AbortController(); const timeout=setTimeout(()=>controller.abort(),25000);
   try {
     const response=await fetch(path,{...options,headers,signal:controller.signal});
-    const data=await response.json();
+    const contentType=response.headers.get("content-type")||"";
+    const data=contentType.includes("application/json") ? await response.json() : {detail:await response.text()};
     if (!response.ok) { const error=new Error(typeof data.detail==="string" ? data.detail : "Не удалось выполнить запрос."); error.code=data.code; error.status=response.status; throw error; }
     return data;
   } catch(error) { if(error.name==="AbortError") throw new Error("Сервер не ответил вовремя. Повторите запрос."); throw error; }
@@ -143,7 +153,8 @@ function drawChart() {
   for(let i=0;i<5;i++){const idx=Math.round(i*(data.length-1)/4);ctx.fillStyle="#a8b29e";ctx.textAlign="center";ctx.fillText(clockTime(data[idx].time).slice(0,5),x(idx),h-8);}ctx.textAlign="left";
 }
 new ResizeObserver(drawChart).observe($("market-chart"));
-$("refresh-button").addEventListener("click",()=>loadMarket());$("chart-retry").addEventListener("click",()=>loadMarket(true));
+$("refresh-button").addEventListener("click",()=>loadMarket());
+$("chart-retry").addEventListener("click",()=>state.session?loadMarket(true):window.location.reload());
 $("analyze-button").addEventListener("click",async()=>{
   if(!state.session||state.analyzing)return;
   const button=$("analyze-button"),symbol=state.symbol,expiry=state.expiry;button.disabled=true;state.analyzing=true;
@@ -301,7 +312,14 @@ async function boot(){
     if(!state.session.forex_ready){state.category="crypto";state.symbol="BTCUSDT";}
     renderAssets();await loadMarket(true);await loadHistory();
     if(!state.session.preview){state.watch=await api("/api/watch");renderWatch();}
-  }catch(error){resetMetrics();text("chart-empty-title","Откройте приложение в Telegram");text("chart-empty-text",error.message);text("signal-direction","Требуется вход");text("data-metric","Нет сессии");toast(error.message);}
+  }catch(error){
+    state.session=null;resetMetrics();$("chart-retry").hidden=false;
+    const authError=error.status===401 || error.status===403 || !telegramInitData();
+    text("chart-empty-title",authError?"Сессия Telegram не подтверждена":"Сервис временно недоступен");
+    text("chart-empty-text",authError?"Закройте Mini App, снова откройте его через кнопку бота и не используйте обычную ссылку браузера.":error.message);
+    text("signal-direction",authError?"Нужен вход через Telegram":"Ошибка сервера");text("data-metric",authError?"Нет сессии":"Ошибка");
+    toast(authError?"Откройте Mini App заново через Telegram.":error.message);
+  }
 }
 setInterval(tick,1000);
 setInterval(async()=>{
