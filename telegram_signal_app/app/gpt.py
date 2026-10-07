@@ -1,14 +1,17 @@
 """Optional, explicitly requested GPT reviews of server-generated market snapshots."""
 import asyncio
+import copy
 import json
 import time
 
 import httpx
 
 
+SIGNAL_TIMEOUT = 25
+
 MODELS = {
+    "gpt-6-luna": "GPT-6 Luna · быстрый прогноз",
     "gpt-6.1-sol": "GPT-6.1 Sol · баланс цены и качества",
-    "gpt-6-luna": "GPT-6 Luna · экономичный",
     "gpt-6-astra": "GPT-6 Astra · подробный анализ",
 }
 
@@ -24,6 +27,7 @@ class GPTReview:
         self.settings, self.client = settings, client
         self.lock = asyncio.Lock()
         self.last_request = {}
+        self.cache = {}
 
     async def review(self, snapshot, model, user_id, signal=False):
         if model not in MODELS:
@@ -32,6 +36,11 @@ class GPTReview:
             raise GPTError("missing_openai_key", "Добавьте OPENAI_API_KEY в Railway Variables и перезапустите сервер.")
         if not snapshot.get("fresh"):
             raise GPTError("stale_market", "Для GPT-разбора нужны свежие рыночные данные.", 409)
+        cache_key = (user_id, model, snapshot.get("symbol"), snapshot.get("expiry"),
+                     snapshot.get("candle_time"), snapshot.get("entry_at"))
+        cached = self.cache.get(cache_key) if signal else None
+        if cached and time.monotonic() - cached[0] < 45:
+            return copy.deepcopy(cached[1])
         if self.lock.locked():
             raise GPTError("gpt_busy", "Другой GPT-разбор уже выполняется. Повторите позже.", 429)
         async with self.lock:
@@ -55,32 +64,36 @@ class GPTReview:
                 "Ты анализируешь рынок самостоятельно по предоставленным свечам и индикаторам. "
                 "Ответ на русском в заданном JSON. Выбери направление CALL (вверх), PUT (вниз) "
                 "или WAIT (пропустить) для заданной экспирации и серверного времени входа. "
-                "Объясни выбор в summary, перечисли риски в risks. При противоречиях или недостатке "
-                "данных выбирай WAIT. Не выдумывай новости, цены, точность или вероятность выигрыша. "
+                "На пригодных данных выбирай наиболее вероятное направление CALL или PUT. "
+                "При слабых или противоречивых признаках отмечай низкую надёжность в risks. "
+                "WAIT используй при непригодных данных, без оснований для направления. "
+                "Summary: одна короткая фраза до 15 слов; risks: максимум два кратких риска. "
+                "Не выдумывай новости, цены, точность или вероятность выигрыша. "
                 "Источник внешний, цены Pocket Option могут отличаться; OTC не поддерживается."
             )
             try:
-                response = await self.client.post(
-                    "https://api.openai.com/v1/responses",
-                    headers={"Authorization": "Bearer " + self.settings.openai_api_key},
-                    timeout=75,
-                    json={"model": model, "store": False, "max_output_tokens": 2200,
-                          "reasoning": {"effort": "low"},
-                          **extra,
-                          "instructions": signal_instructions if signal else (
-                              "Ты аналитический помощник. Ответ на русском, до 250 слов. "
-                              "Разбери только предоставленный сервером снимок внешнего рынка: тренд, "
-                              "импульс, волатильность, аргументы за и против текущего ML-прогноза. "
-                              "Укажи актив, источник и время актуальности. Отмечай отсутствие данных. "
-                              "Не придумывай новости, цены, точность, вероятность успеха или гарантии. "
-                              "Числовую вероятность можно только процитировать из probability с её ограничениями. "
-                              "Это дополнительный разбор, а не новый сигнал. Не назначай новое время входа. "
-                              "При WAIT объясни причину; не превращай его в CALL/PUT. "
-                              "Укажи, что цены Pocket Option могут отличаться, OTC не поддерживается."),
-                          "input": json.dumps(context, ensure_ascii=False, allow_nan=False)},
-                )
-            except httpx.TimeoutException:
-                raise GPTError("gpt_timeout", "OpenAI не ответил вовремя. Текущий ML-сигнал доступен; повторите GPT-разбор позже.") from None
+                async with asyncio.timeout(SIGNAL_TIMEOUT if signal else 75):
+                    response = await self.client.post(
+                        "https://api.openai.com/v1/responses",
+                        headers={"Authorization": "Bearer " + self.settings.openai_api_key},
+                        timeout=SIGNAL_TIMEOUT if signal else 75,
+                        json={"model": model, "store": False, "max_output_tokens": (1200 if signal else 2200),
+                              "reasoning": {"effort": "none" if signal and model == "gpt-6-luna" else "low"},
+                              **extra,
+                              "instructions": signal_instructions if signal else (
+                                  "Ты аналитический помощник. Ответ на русском, до 250 слов. "
+                                  "Разбери только предоставленный сервером снимок внешнего рынка: тренд, "
+                                  "импульс, волатильность, аргументы за и против текущего ML-прогноза. "
+                                  "Укажи актив, источник и время актуальности. Отмечай отсутствие данных. "
+                                  "Не придумывай новости, цены, точность, вероятность успеха или гарантии. "
+                                  "Числовую вероятность можно только процитировать из probability с её ограничениями. "
+                                  "Это дополнительный разбор, а не новый сигнал. Не назначай новое время входа. "
+                                  "При WAIT объясни причину; не превращай его в CALL/PUT. "
+                                  "Укажи, что цены Pocket Option могут отличаться, OTC не поддерживается."),
+                              "input": json.dumps(context, ensure_ascii=False, allow_nan=False)},
+                    )
+            except (httpx.TimeoutException, TimeoutError):
+                raise GPTError("gpt_timeout", "OpenAI не ответил за отведённое время. Выберите GPT-6 Luna для быстрого прогноза или ML Model.") from None
             except httpx.HTTPError:
                 raise GPTError("gpt_network", "Не удалось подключиться к OpenAI. Повторите позже.") from None
             if response.status_code != 200:
@@ -118,4 +131,7 @@ class GPTReview:
                 except (ValueError, KeyError, TypeError):
                     raise GPTError("gpt_invalid_signal", "GPT вернул некорректный прогноз. Повторите позже.") from None
                 result["prediction"] = prediction
+                self.cache[cache_key] = (time.monotonic(), copy.deepcopy(result))
+                if len(self.cache) > 128:
+                    self.cache.pop(next(iter(self.cache)))
             return result

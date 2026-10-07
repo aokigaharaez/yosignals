@@ -174,3 +174,57 @@ async def test_existing_journal_migration_preserves_ids_results_and_owners(tmp_p
     await db.init()
     assert (await db.get(9))['result'] == 'WIN'
     assert await db.is_owner(42)
+
+@pytest.mark.asyncio
+async def test_fast_luna_forecast_reuses_completed_result_without_another_charge():
+    calls = []
+    def respond(request):
+        payload = json.loads(request.content)
+        assert payload['model'] == 'gpt-6-luna'
+        assert payload['reasoning']['effort'] == 'none'
+        assert payload['max_output_tokens'] == 1200
+        calls.append(request)
+        return httpx.Response(200, json={'status':'completed','output':[
+            {'type':'message','role':'assistant','content':[{'type':'output_text',
+            'text':json.dumps({'direction':'PUT','summary':'Импульс вниз','risks':['Слабый сигнал']})}]}]})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        review = GPTReview(Settings(openai_api_key='secret'), client)
+        first = await review.review(SNAPSHOT, 'gpt-6-luna', 42, signal=True)
+        second = await review.review(SNAPSHOT, 'gpt-6-luna', 42, signal=True)
+        assert second['prediction']['direction'] == 'PUT'
+        assert len(calls) == 1
+        second['prediction']['direction'] = 'CALL'
+        assert first['prediction']['direction'] == 'PUT'
+        with pytest.raises(GPTError) as error:
+            await review.review({**SNAPSHOT, 'entry_at':SNAPSHOT['entry_at']+60}, 'gpt-6-luna', 42, signal=True)
+        assert error.value.code == 'gpt_rate_limit'
+
+
+@pytest.mark.asyncio
+async def test_gpt_deadline_cancels_slow_provider_and_releases_lock(monkeypatch):
+    monkeypatch.setattr('app.gpt.SIGNAL_TIMEOUT', .01)
+    async def respond(request):
+        await asyncio.sleep(.2)
+        return httpx.Response(200)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        review = GPTReview(Settings(openai_api_key='secret'), client)
+        with pytest.raises(GPTError) as error:
+            await review.review(SNAPSHOT, 'gpt-6-luna', 42, signal=True)
+        assert error.value.code == 'gpt_timeout'
+        assert not review.lock.locked()
+
+
+@pytest.mark.asyncio
+async def test_gpt_market_snapshot_does_not_wait_for_ml_training(tmp_path):
+    from app.services import SignalService
+    from app.db import Database
+    from test_core import candles
+    class Market:
+        async def candles(self, symbol): return candles(400)
+    service = SignalService(Settings(), Market(), Database(str(tmp_path/'unused.db')))
+    await service.lock.acquire()
+    try:
+        result = await asyncio.wait_for(service.snapshot('BTCUSDT', 3, ml=False), timeout=1)
+        assert result['fresh'] and result['candles']
+    finally:
+        service.lock.release()

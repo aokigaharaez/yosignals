@@ -1,6 +1,6 @@
 "use strict";
 const $ = id => document.getElementById(id);
-const state = {session:null, engine:"ml", symbol:"EURUSD", expiry:3, category:"forex", chart:"candles", snapshot:null, lastGPT:0, sequence:0, loading:false, analyzing:false, watch:null, offset:0, page:"overview", history:[], historyLoaded:false, seenId:0, events:new Set(), historyLoading:false};
+const state = {session:null, engine:"ml", symbol:"EURUSD", expiry:3, category:"forex", chart:"candles", snapshot:null, analysisStarted:0, analysisError:null, lastGPT:0, sequence:0, loading:false, analyzing:false, watch:null, offset:0, page:"overview", history:[], historyLoaded:false, seenId:0, events:new Set(), historyLoading:false};
 const tg = window.Telegram?.WebApp;
 if (tg?.initData) { tg.ready(); tg.expand(); tg.setHeaderColor?.("#f5f7f9"); tg.setBackgroundColor?.("#f5f7f9"); }
 function telegramInitData() {
@@ -74,7 +74,7 @@ function resetMetrics() {
   text("score-metric","—");text("probability-detail","Оценка по внешнему рынку");text("validation-metric","—");text("validation-detail","Вне обучающей выборки");
   $("forecast-quality").hidden=true;
   ["trend-value","ema-value","rsi-value","atr-value"].forEach(id=>text(id,"—"));
-  $("signal-state").className="signal-state";text("signal-symbol","∿");text("signal-direction","Ожидание данных");
+  $("signal-state").className="signal-state";text("signal-symbol","∿");text("signal-direction","—");text("signal-action","Ожидание прогноза");
   text("signal-summary","Анализ появится после получения рыночных свечей.");$("signal-timing").hidden=true;
   $("chart-empty").hidden=false;$("chart-retry").hidden=true;
   text("chart-empty-title","Подключаем рынок");text("chart-empty-text","Получаем минутные свечи от поставщика данных.");
@@ -121,7 +121,8 @@ function renderSnapshot() {
   text("probability-detail",d.probability?(d.probability.method==="historical_bin"?`${d.probability.samples} похожих прогнозов`:"Предварительная оценка · без калибровки"):"Недостаточно данных для оценки");
   text("validation-metric",d.validation?`${d.validation.accuracy}%`:"—");
   text("validation-detail",d.validation?`${d.validation.samples} примеров · база ${d.validation.baseline}%`:"Недостаточно истории");
-  const labels={WAIT:d.status==="loading"?"Подготовка анализа":"Нет прогноза",CALL:"CALL · Вверх",PUT:"PUT · Вниз"};
+  const labels={WAIT:"—",CALL:"CALL",PUT:"PUT"};
+  text("signal-action",{CALL:"ВВЕРХ ↑",PUT:"ВНИЗ ↓",WAIT:d.status==="loading"?"Подготовка модели":"НЕТ СИГНАЛА"}[d.direction]);
   text("signal-direction",labels[d.direction]);text("signal-symbol",{WAIT:"∿",CALL:"↗",PUT:"↘"}[d.direction]);
   $("signal-state").className=`signal-state ${d.direction.toLowerCase()}`;
   text("signal-summary",d.reasons.join(" "));
@@ -173,15 +174,15 @@ async function requestAnalysis(auto=false){
   let entry;try{entry=selectedEntry(true);}catch(error){if(!auto)toast(error.message);return;}
   if(state.engine==="gpt")state.lastGPT=now();
   if(state.engine==="gpt"&&(!state.session.gpt_ready||state.session.preview)){toast("Для GPT нужен OPENAI_API_KEY и вход владельца через Telegram.");return;}
-  const button=$("analyze-button"),symbol=state.symbol,expiry=state.expiry;button.disabled=true;state.analyzing=true;
+  const button=$("analyze-button"),symbol=state.symbol,expiry=state.expiry;button.disabled=true;state.analyzing=true;state.analysisStarted=now();state.analysisError=null;$("analysis-progress").hidden=false;
   const seq=++state.sequence;
   button.querySelector("span").textContent="Анализируем рынок…";
   try {
-    const run=state.session.preview?await api(`/api/market?symbol=${encodeURIComponent(symbol)}&expiry=${expiry}${entry?`&entry_at=${entry}`:""}`):await api("/api/analyses",{method:"POST",body:JSON.stringify({symbol,expiry,entry_at:entry,engine:state.engine,model:$("gpt-model").value||"gpt-6.1-sol"})});
-    if(seq===state.sequence){state.snapshot=run;state.snapshot.forecast_at=run.server_time;state.snapshot.forecast_data_as_of=run.data_as_of;state.snapshot.selection_entry_at=entry;state.offset=run.server_time-Date.now()/1000;renderSnapshot();}
+    const run=state.session.preview?await api(`/api/market?symbol=${encodeURIComponent(symbol)}&expiry=${expiry}${entry?`&entry_at=${entry}`:""}`):await api("/api/analyses",{method:"POST",body:JSON.stringify({symbol,expiry,entry_at:entry,engine:state.engine,model:$("gpt-model").value||"gpt-6-luna"})});
+    if(seq===state.sequence){state.snapshot=run;state.snapshot.forecast_at=run.server_time;state.analysisError=null;state.snapshot.forecast_data_as_of=run.data_as_of;state.snapshot.selection_entry_at=entry;state.offset=run.server_time-Date.now()/1000;renderSnapshot();}
     if(state.session.preview)toast("Прогноз готов. Для сохранения и автоанализа откройте Mini App в Telegram.");
     else {state.seenId=Math.max(state.seenId,run.id);toast(`Анализ #${run.id} · ${run.label}: ${run.direction==="WAIT"?"нет прогноза":run.direction}.`);await loadHistory();}
-  }catch(error){if(!auto)toast(error.message);text("signal-updated",`Обновление анализа не удалось: ${error.message}`);}finally{button.disabled=false;state.analyzing=false;button.querySelector("span").textContent="Получить сигнал";}
+  }catch(error){state.analysisError=error.message;if(!auto)toast(error.message);text("signal-updated",`Обновление анализа не удалось: ${error.message}`);if(!state.snapshot||state.snapshot.direction==="WAIT"){text("signal-direction","—");text("signal-action","НЕТ СИГНАЛА");text("signal-summary",error.message);}}finally{button.disabled=false;state.analyzing=false;$("analysis-progress").hidden=true;button.querySelector("span").textContent="Получить сигнал";}
 }
 $("analyze-button").addEventListener("click",()=>requestAnalysis());
 function renderWatch() {
@@ -315,9 +316,10 @@ function tick(){
       if(event==="close")loadHistory();
     }
   }
+  if(state.analyzing){const elapsed=Math.max(0,Math.floor(now()-state.analysisStarted));text("analysis-progress",`${state.engine==="gpt"?"Получаем прогноз GPT":"Рассчитываем ML-прогноз"} · ${elapsed} сек`);}
   const d=state.snapshot;if(!d)return;
   const forecastOld=now()-(d.forecast_data_as_of||d.data_as_of)>(state.session.max_data_age_seconds||90);
-  text("signal-updated",`${d.engine==="gpt"?d.model:"ML Model"} · анализ ${clockTime(d.forecast_at||d.server_time)} · вход ${clockTime(d.entry_at)} · ${d.expiry} мин${forecastOld?" · прогноз устарел":now()>=d.entry_at?" · время входа прошло":""}`);
+  text("signal-updated",`${d.engine==="gpt"?d.model:"ML Model"} · анализ ${clockTime(d.forecast_at||d.server_time)} · вход ${clockTime(d.entry_at)} · ${d.expiry} мин${state.analysisError?` · ${state.analysisError}`:""}${forecastOld?" · прогноз устарел":now()>=d.entry_at?" · время входа прошло":""}`);
   const remaining=Math.ceil(d.entry_at-now());text("entry-countdown",remaining>0?`${remaining} сек`:"Вход завершён");
   if(d.direction!=="WAIT"&&remaining<=0)text("entry-countdown",d.close_at>now()?"Сделка в процессе":"Экспирация завершена");
   if(now()-d.data_as_of>(state.session.max_data_age_seconds||90)){text("data-metric","Устарели");$("live-dot").className="live-dot";text("chart-source",`${d.provider} · данные устарели`);text("data-detail","Последний анализ сохранён. Ожидаем свежие котировки от источника.");}

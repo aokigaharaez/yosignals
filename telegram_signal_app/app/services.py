@@ -6,6 +6,7 @@ import importlib
 import logging
 import math
 import time
+from contextlib import nullcontext
 from .config import Settings
 from .db import Database
 from .market import MarketData, MarketError
@@ -43,7 +44,7 @@ class SignalService:
                   "reasons": ["Модель загружается. Анализ появится после подготовки библиотек."
                               if self.model_status == "loading" else "Библиотеки модели недоступны. Проверьте зависимости сервера."],
                   "model_ready": False}
-        async with self.lock:
+        async with (self.lock if ml else nullcontext()):
             for _ in range(3):
                 now = int(time.time())
                 entry, lead = plan_entry(data_as_of, entry_at, now=now)
