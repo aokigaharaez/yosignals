@@ -28,7 +28,7 @@ TOKEN = "123456:TEST_TOKEN_NOT_REAL"
 def signed(user=42, timestamp=None, **extra):
     data = {"auth_date": str(int(time.time()) if timestamp is None else timestamp),
             "user": json.dumps({"id": user, "first_name": "Tester"}), **extra}
-    secret = hmac.new(TOKEN.encode(), b"WebAppData", hashlib.sha256).digest()
+    secret = hmac.new(b"WebAppData", TOKEN.encode(), hashlib.sha256).digest()
     check = "\n".join(f"{k}={v}" for k, v in sorted(data.items()))
     data["hash"] = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
     return urlencode(data)
@@ -50,6 +50,24 @@ def test_telegram_auth_tampering_expiry_and_duplicate_fields():
                      (valid,900), (valid+"&auth_date=1000",1100), ("",1100)]:
         with pytest.raises(AuthError):
             validate_init_data(raw, TOKEN, 3600, now=now)
+
+
+def test_telegram_auth_independent_node_crypto_vector():
+    # Fixed vector generated with Node createHmac, independent of signed().
+    raw = urlencode({"auth_date": "1000", "user": '{"id":42,"first_name":"Tester"}',
+                     "hash": "7730699af60567bb991790d98fcf5d133d2c69730bc9f018c16b262fb4105341"})
+    assert validate_init_data(raw, TOKEN, 3600, now=1100)["id"] == 42
+    with pytest.raises(AuthError):
+        validate_init_data(raw, "another-bot-token", 3600, now=1100)
+
+
+def test_telegram_auth_rejects_reversed_hmac_arguments():
+    data = {"auth_date": "1000", "user": '{"id":42}'}
+    wrong_secret = hmac.new(TOKEN.encode(), b"WebAppData", hashlib.sha256).digest()
+    check = "\n".join(f"{k}={v}" for k, v in sorted(data.items()))
+    data["hash"] = hmac.new(wrong_secret, check.encode(), hashlib.sha256).hexdigest()
+    with pytest.raises(AuthError):
+        validate_init_data(urlencode(data), TOKEN, 3600, now=1100)
 
 
 def test_features_are_causal_and_targets_match_entry_timing():
