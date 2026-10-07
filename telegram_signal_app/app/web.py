@@ -35,10 +35,11 @@ log = logging.getLogger(__name__)
 class AnalysisRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     symbol: str
-    expiry: Literal[1, 3, 5, 15] = 3
+    expiry: int = Field(default=3, strict=True, ge=1, le=60)
 
 
 class SignalRequest(AnalysisRequest):
+    entry_at: int | None = Field(default=None, strict=True)
     engine: Literal["ml", "gpt"] = "ml"
     model: Literal["gpt-6.1-sol", "gpt-6-luna", "gpt-6-astra"] = "gpt-6.1-sol"
 
@@ -167,7 +168,7 @@ def create_app(settings: Settings) -> FastAPI:
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "version": "2.6", "delivery": "miniapp"}
+        return {"status": "ok", "version": "2.7", "delivery": "miniapp"}
 
     @app.get("/api/session")
     async def session(request: Request):
@@ -178,16 +179,16 @@ def create_app(settings: Settings) -> FastAPI:
                 "bot_status": app.state.bot_status, "model_status": app.state.service.model_status,
                 "forex_ready": bool(settings.twelve_data_api_key), "webapp_ready": bool(settings.webapp_url),
                 "min_score": settings.model_min_score * 100, "max_data_age_seconds": settings.max_data_age_seconds,
-                "delivery": "miniapp", "version": "2.6",
+                "delivery": "miniapp", "version": "2.7",
                 "gpt_ready": bool(settings.openai_api_key),
                 "gpt_models": [{"id": k, "label": v} for k, v in MODELS.items()],
                 "instruments": [asdict(i) for i in INSTRUMENTS.values()], "expiries": EXPIRIES}
 
     @app.get("/api/market")
-    async def market(request: Request, symbol: str = "EURUSD", expiry: int = 3):
+    async def market(request: Request, symbol: str = "EURUSD", expiry: int = 3, entry_at: int | None = None, engine: Literal["ml", "gpt"] = "ml"):
         identity = await user(request, preview=True)
         rate_limit(identity)
-        return await app.state.service.snapshot(symbol, expiry)
+        return await app.state.service.snapshot(symbol, expiry, ml=engine == "ml", entry_at=entry_at)
 
     @app.post("/api/analyses")
     async def create_analysis(request: Request, body: SignalRequest):
@@ -196,8 +197,8 @@ def create_app(settings: Settings) -> FastAPI:
         if body.engine == "gpt":
             if not settings.openai_api_key:
                 raise GPTError("missing_openai_key", "Добавьте OPENAI_API_KEY в Railway Variables.")
-            return await app.state.service.create_gpt(body.symbol, body.expiry, body.model, identity["id"], app.state.gpt)
-        return await app.state.service.create(body.symbol, body.expiry)
+            return await app.state.service.create_gpt(body.symbol, body.expiry, body.model, identity["id"], app.state.gpt, **({"entry_at": body.entry_at} if body.entry_at is not None else {}))
+        return await app.state.service.create(body.symbol, body.expiry, **({"entry_at": body.entry_at} if body.entry_at is not None else {}))
 
     @app.post("/api/gpt/review")
     async def gpt_review(request: Request, body: GPTRequest):

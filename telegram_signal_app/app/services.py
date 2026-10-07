@@ -10,6 +10,7 @@ from .config import Settings
 from .db import Database
 from .market import MarketData, MarketError
 from .models import INSTRUMENTS, EXPIRIES
+from .timing import plan_entry, validate_entry
 
 
 class SignalService:
@@ -30,9 +31,10 @@ class SignalService:
             self.model_status = "error"
             logging.getLogger(__name__).error("Cannot load ML libraries. Install requirements.txt and restart.")
 
-    async def snapshot(self, symbol: str, expiry: int, ml: bool = True) -> dict:
-        if expiry not in EXPIRIES:
-            raise MarketError("unsupported_expiry", "Выберите экспирацию 1, 3, 5 или 15 минут.")
+    async def snapshot(self, symbol: str, expiry: int, ml: bool = True, entry_at: int | None = None) -> dict:
+        if type(expiry) is not int or not 1 <= expiry <= 60:
+            raise MarketError("unsupported_expiry", "Выберите экспирацию от 1 до 60 минут.")
+        validate_entry(entry_at, now=int(time.time()))
         candles = await self.market.candles(symbol)
         last = candles[-1]
         data_as_of = last.time + 60
@@ -44,8 +46,7 @@ class SignalService:
         async with self.lock:
             for _ in range(3):
                 now = int(time.time())
-                lead = max(1, math.ceil((now + 10 - data_as_of) / 60))
-                entry = data_as_of + lead * 60
+                entry, lead = plan_entry(data_as_of, entry_at, now=now)
                 if not ml or now - data_as_of > self.settings.max_data_age_seconds or self.analyzer is None:
                     break
                 key = symbol, expiry, lead
@@ -55,6 +56,8 @@ class SignalService:
                 else:
                     result = await asyncio.to_thread(self.analyzer, candles, expiry, self.settings, entry_delay=lead)
                     self.cache[key] = (last.time, copy.deepcopy(result))
+                    if len(self.cache) > 256:
+                        self.cache.pop(next(iter(self.cache)))
                 if entry - int(time.time()) >= 10:
                     break
         # Recheck time after potentially expensive training, even for cached models.
@@ -76,10 +79,11 @@ class SignalService:
                       score_note="Оценка успеха направления на внешнем рынке. Вероятность выигрыша в Pocket Option не проверена.")
         return result
 
-    async def create_gpt(self, symbol, expiry, model, user_id, gpt):
-        snapshot = await self.snapshot(symbol, expiry, ml=False)
+    async def create_gpt(self, symbol, expiry, model, user_id, gpt, entry_at=None):
+        validate_entry(entry_at, now=int(time.time()))
+        snapshot = await self.snapshot(symbol, expiry, ml=False, **({"entry_at": entry_at} if entry_at is not None else {}))
         # Reserve time for the API before the scheduled entry; never shift a completed forecast.
-        snapshot["entry_at"] = math.ceil((int(time.time()) + 90) / 60) * 60
+        snapshot["entry_at"], _ = plan_entry(snapshot["data_as_of"], entry_at, reserve=90, now=int(time.time()))
         snapshot["close_at"] = snapshot["entry_at"] + expiry * 60
         snapshot["entry_delay"] = (snapshot["entry_at"] - snapshot["data_as_of"]) // 60
         review = await gpt.review(snapshot, model, user_id, signal=True)
@@ -96,8 +100,8 @@ class SignalService:
         saved = await self.db.save({k: v for k, v in snapshot.items() if k != "candles"})
         return {**saved, "candles": snapshot["candles"], "server_time": now}
 
-    async def create(self, symbol: str, expiry: int) -> dict:
-        result = await self.snapshot(symbol, expiry)
+    async def create(self, symbol: str, expiry: int, entry_at: int | None = None) -> dict:
+        result = await self.snapshot(symbol, expiry, **({"entry_at": entry_at} if entry_at is not None else {}))
         if not result["fresh"]:
             raise MarketError("stale_data", result["reasons"][0])
         if self.model_status != "ready":

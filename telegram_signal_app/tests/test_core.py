@@ -198,7 +198,7 @@ def test_api_auth_preview_cannot_write_and_owner_isolation(app):
         assert client.get("/api/history").json()["items"]==[]
         assert client.get("/api/market?symbol=EURUSD").json()["code"]=="missing_key"
         assert client.get("/api/market?symbol=EURUSD_OTC").json()["code"]=="unsupported"
-        assert client.post("/api/analyses",json={"symbol":"EURUSD","expiry":2}).status_code==422
+        assert client.post("/api/analyses",json={"symbol":"EURUSD","expiry":0}).status_code==422
         unavailable = client.put("/api/watch",json={"enabled":True,"symbol":"EURUSD","expiry":3})
         assert unavailable.status_code==503 and unavailable.json()["code"]=="missing_key"
         assert client.post("/api/history/999/result",json={"result":"WIN"}).status_code==409

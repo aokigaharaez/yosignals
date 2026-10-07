@@ -109,6 +109,9 @@ def analyze(candles: list[Candle], horizon: int, settings: Settings, entry_delay
         base["reasons"] = ["Недостаточно непрерывной истории для этой экспирации."]
         return base
     train, calibration, test = chronological_split(indices, horizon, entry_delay)
+    if not len(calibration) or not len(test):
+        base["reasons"] = ["Для выбранного времени входа и экспирации недостаточно истории для независимой проверки."]
+        return base
     train = train[targets[train] >= 0]
     if len(train) < 120 or len(np.unique(targets[train])) < 2:
         base["reasons"] = ["Недостаточно обучающих примеров с движением в обе стороны."]

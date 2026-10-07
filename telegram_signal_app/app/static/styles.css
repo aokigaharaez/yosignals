@@ -15,3 +15,5 @@
 .gpt-panel{margin-top:24px}.gpt-panel select{width:100%;padding:12px;border:1px solid #dce3e1;border-radius:10px;background:#fff;color:#172923;margin:8px 0}.gpt-result{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7;margin-top:16px}.gpt-panel #gpt-meta{font-size:12px;color:#64776e}
 
 .signal-panel select{width:100%;padding:10px;border:1px solid #dce3e1;border-radius:10px;background:white;margin:8px 0;color:#172923}#gpt-controls{margin-bottom:12px;font-size:12px;line-height:1.6}
+
+.signal-panel input[type=number],.signal-panel input[type=datetime-local]{width:100%;padding:10px;border:1px solid #dce3e1;border-radius:10px;background:white;margin:8px 0}.live-analysis{display:block;margin:12px 0}#signal-updated{font-size:12px;color:#64776e}
