@@ -228,3 +228,41 @@ async def test_gpt_market_snapshot_does_not_wait_for_ml_training(tmp_path):
         assert result['fresh'] and result['candles']
     finally:
         service.lock.release()
+
+@pytest.mark.asyncio
+async def test_forex_delayed_feed_can_reach_gpt_with_explicit_delay(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from app.services import SignalService
+    from app.db import Database
+    from test_core import candles
+    boundary = 1800000000
+    monkeypatch.setattr('app.services.time', SimpleNamespace(time=lambda:boundary+99))
+    class Market:
+        async def candles(self, symbol): return candles(400,end=boundary)
+    class GPT:
+        async def review(self, data, model, user_id, signal=False):
+            assert data['fresh'] and data['delayed'] and data['data_age_seconds'] == 99
+            assert data['max_data_age_seconds'] == 180
+            assert data['indicators']['rsi'] is not None
+            return {'prediction':{'direction':'CALL','summary':'Импульс вверх','risks':[]}}
+    db=Database(str(tmp_path/'forex.db'));await db.init()
+    service=SignalService(Settings(),Market(),db)
+    result=await service.create_gpt('EURUSD',3,'gpt-6-luna',42,GPT())
+    assert result['direction']=='CALL' and result['raw_direction']=='CALL'
+    assert result['forecast_state']=='ready' and not result['forecast_pending']
+    assert result['delayed'] and any('99' in reason for reason in result['reasons'])
+    crypto=await service.snapshot('BTCUSDT',3,ml=False)
+    assert not crypto['fresh'] and crypto['max_data_age_seconds']==90
+
+
+def test_gpt_indicators_match_existing_ml_calculations():
+    from app.technical import indicators
+    from app.analysis import features
+    from test_core import candles
+    rows=candles(400)
+    expected=features(rows)[1]
+    actual=indicators(rows)
+    for name in ('ema9','ema21','rsi','atr'):
+        assert actual[name]==pytest.approx(expected[name])
+    assert actual['trend']==expected['trend']
+    assert indicators(rows[:10])=={}

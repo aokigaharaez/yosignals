@@ -93,10 +93,10 @@ async function loadMarket(reset=false) {
     const paused=!$("live-analysis").checked&&!!state.snapshot;
     const data=await api(`/api/market?symbol=${encodeURIComponent(state.symbol)}&expiry=${state.expiry}&engine=${expired||paused?"gpt":state.engine}${entry&&!expired?`&entry_at=${entry}`:""}`);
     if(seq!==state.sequence) return;
-    if(state.engine==="gpt"){data.engine="gpt";data.direction="WAIT";data.probability=null;data.validation=null;data.quality="unavailable";data.model="GPT";data.reasons=["Нажмите «Получить сигнал»: выбранная GPT-модель самостоятельно проанализирует рынок."];}
+    if(state.engine==="gpt"){data.engine="gpt";data.direction="WAIT";data.probability=null;data.validation=null;data.quality="unavailable";data.model="GPT";data.forecast_pending=true;data.reasons=["Нажмите «Получить сигнал»: выбранная GPT-модель самостоятельно проанализирует рынок."];}
     if((state.engine==="gpt"||expired||paused||!data.fresh)&&state.snapshot?.symbol===data.symbol&&state.snapshot?.expiry===data.expiry&&state.snapshot.selection_entry_at===entry&&(state.snapshot.engine||"ml")===state.engine){
       const previous=state.snapshot;
-      state.snapshot={...previous,candles:data.candles,price:data.price,change_percent:data.change_percent,data_as_of:data.data_as_of,data_age_seconds:data.data_age_seconds,fresh:data.fresh,sample_count:data.sample_count};
+      state.snapshot={...previous,candles:data.candles,price:data.price,change_percent:data.change_percent,data_as_of:data.data_as_of,data_age_seconds:data.data_age_seconds,fresh:data.fresh,delayed:data.delayed,max_data_age_seconds:data.max_data_age_seconds,sample_count:data.sample_count,indicators:data.indicators};
     }else{state.snapshot=data;state.snapshot.forecast_at=data.server_time;state.snapshot.forecast_data_as_of=data.data_as_of;state.snapshot.selection_entry_at=entry;}
     state.offset=data.server_time-Date.now()/1000;renderSnapshot();
     if(state.engine==="gpt"&&$("live-analysis").checked&&!state.analyzing&&!expired)requestAnalysis(true);
@@ -116,16 +116,17 @@ function renderSnapshot() {
   text("signal-updated",`${d.engine==="gpt"?d.model:"ML Model"} · анализ ${clockTime(d.forecast_at||d.server_time)} · вход ${clockTime(d.entry_at)} · экспирация ${d.expiry} мин`);
   text("asset-price",price(d.price));text("asset-change",`${d.change_percent>=0?"+":""}${d.change_percent.toFixed(3)}% за 60 мин`);
   $("asset-change").className=d.change_percent>=0?"positive":"negative";
-  text("data-metric",d.fresh?"Актуальны":"Устарели");text("data-detail",`${d.sample_count} свечей · обновлено ${clockTime(d.data_as_of)}`);
+  text("data-metric",!d.fresh?"Устарели":d.delayed?"Задержка источника":"Актуальны");text("data-detail",`${d.sample_count} свечей · возраст ${Math.round(now()-d.data_as_of)} сек · ${clockTime(d.data_as_of)}`);
   text("score-metric",chance(d));
   text("probability-detail",d.probability?(d.probability.method==="historical_bin"?`${d.probability.samples} похожих прогнозов`:"Предварительная оценка · без калибровки"):"Недостаточно данных для оценки");
   text("validation-metric",d.validation?`${d.validation.accuracy}%`:"—");
   text("validation-detail",d.validation?`${d.validation.samples} примеров · база ${d.validation.baseline}%`:"Недостаточно истории");
   const labels={WAIT:"—",CALL:"CALL",PUT:"PUT"};
-  text("signal-action",{CALL:"ВВЕРХ ↑",PUT:"ВНИЗ ↓",WAIT:d.status==="loading"?"Подготовка модели":"НЕТ СИГНАЛА"}[d.direction]);
+  const waiting=d.engine==="gpt"&&d.forecast_pending&&d.fresh;
+  text("signal-action",{CALL:"ВВЕРХ ↑",PUT:"ВНИЗ ↓",WAIT:state.analysisError?(state.engine==="gpt"?"ОШИБКА GPT":"ОШИБКА ML"):d.forecast_state==="stale_data"?"ДАННЫЕ УСТАРЕЛИ":d.forecast_state==="expired_entry"?"ВРЕМЯ ВХОДА ПРОШЛО":waiting?(state.analyzing?"ПОЛУЧАЕМ ПРОГНОЗ GPT":state.session?.gpt_ready?"ЗАПРОСИТЕ GPT-ПРОГНОЗ":"НУЖЕН OPENAI API-КЛЮЧ"):d.status==="loading"?"Подготовка модели":"НЕТ НАПРАВЛЕНИЯ"}[d.direction]);
   text("signal-direction",labels[d.direction]);text("signal-symbol",{WAIT:"∿",CALL:"↗",PUT:"↘"}[d.direction]);
   $("signal-state").className=`signal-state ${d.direction.toLowerCase()}`;
-  text("signal-summary",d.reasons.join(" "));
+  text("signal-summary",state.analysisError||d.reasons.join(" "));$("signal-explanation").open=d.direction==="WAIT"&&(!waiting||!!state.analysisError);
   $("forecast-quality").hidden=d.direction==="WAIT";
   text("quality-badge",d.engine==="gpt"?"GPT · точность не проверена":d.quality==="qualified"?"Фильтры качества пройдены":"Слабый сигнал · высокий риск");
   $("quality-badge").className=`quality-badge ${d.quality||"weak"}`;
@@ -182,7 +183,7 @@ async function requestAnalysis(auto=false){
     if(seq===state.sequence){state.snapshot=run;state.snapshot.forecast_at=run.server_time;state.analysisError=null;state.snapshot.forecast_data_as_of=run.data_as_of;state.snapshot.selection_entry_at=entry;state.offset=run.server_time-Date.now()/1000;renderSnapshot();}
     if(state.session.preview)toast("Прогноз готов. Для сохранения и автоанализа откройте Mini App в Telegram.");
     else {state.seenId=Math.max(state.seenId,run.id);toast(`Анализ #${run.id} · ${run.label}: ${run.direction==="WAIT"?"нет прогноза":run.direction}.`);await loadHistory();}
-  }catch(error){state.analysisError=error.message;if(!auto)toast(error.message);text("signal-updated",`Обновление анализа не удалось: ${error.message}`);if(!state.snapshot||state.snapshot.direction==="WAIT"){text("signal-direction","—");text("signal-action","НЕТ СИГНАЛА");text("signal-summary",error.message);}}finally{button.disabled=false;state.analyzing=false;$("analysis-progress").hidden=true;button.querySelector("span").textContent="Получить сигнал";}
+  }catch(error){state.analysisError=error.message;if(!auto)toast(error.message);text("signal-updated",`Обновление анализа не удалось: ${error.message}`);if(!state.snapshot||state.snapshot.direction==="WAIT"){text("signal-direction","—");text("signal-action",state.engine==="gpt"?"ОШИБКА GPT":"ОШИБКА ML");text("signal-summary",error.message);$("signal-explanation").open=true;}}finally{button.disabled=false;state.analyzing=false;$("analysis-progress").hidden=true;button.querySelector("span").textContent="Получить сигнал";}
 }
 $("analyze-button").addEventListener("click",()=>requestAnalysis());
 function renderWatch() {
@@ -316,13 +317,14 @@ function tick(){
       if(event==="close")loadHistory();
     }
   }
+  if(state.snapshot?.direction==="WAIT"&&state.engine==="gpt"&&state.analyzing)text("signal-action","ПОЛУЧАЕМ ПРОГНОЗ GPT");
   if(state.analyzing){const elapsed=Math.max(0,Math.floor(now()-state.analysisStarted));text("analysis-progress",`${state.engine==="gpt"?"Получаем прогноз GPT":"Рассчитываем ML-прогноз"} · ${elapsed} сек`);}
   const d=state.snapshot;if(!d)return;
-  const forecastOld=now()-(d.forecast_data_as_of||d.data_as_of)>(state.session.max_data_age_seconds||90);
+  const forecastOld=now()-(d.forecast_data_as_of||d.data_as_of)>(d.max_data_age_seconds||state.session.max_data_age_seconds||90);
   text("signal-updated",`${d.engine==="gpt"?d.model:"ML Model"} · анализ ${clockTime(d.forecast_at||d.server_time)} · вход ${clockTime(d.entry_at)} · ${d.expiry} мин${state.analysisError?` · ${state.analysisError}`:""}${forecastOld?" · прогноз устарел":now()>=d.entry_at?" · время входа прошло":""}`);
   const remaining=Math.ceil(d.entry_at-now());text("entry-countdown",remaining>0?`${remaining} сек`:"Вход завершён");
   if(d.direction!=="WAIT"&&remaining<=0)text("entry-countdown",d.close_at>now()?"Сделка в процессе":"Экспирация завершена");
-  if(now()-d.data_as_of>(state.session.max_data_age_seconds||90)){text("data-metric","Устарели");$("live-dot").className="live-dot";text("chart-source",`${d.provider} · данные устарели`);text("data-detail","Последний анализ сохранён. Ожидаем свежие котировки от источника.");}
+  if(now()-d.data_as_of>(d.max_data_age_seconds||state.session.max_data_age_seconds||90)){text("data-metric","Устарели");$("live-dot").className="live-dot";text("chart-source",`${d.provider} · данные устарели`);text("data-detail","Последний анализ сохранён. Ожидаем свежие котировки от источника.");}
 }
 async function boot(){
   try{

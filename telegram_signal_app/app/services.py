@@ -12,6 +12,7 @@ from .db import Database
 from .market import MarketData, MarketError
 from .models import INSTRUMENTS, EXPIRIES
 from .timing import plan_entry, validate_entry
+from .technical import indicators
 
 
 class SignalService:
@@ -39,16 +40,21 @@ class SignalService:
         candles = await self.market.candles(symbol)
         last = candles[-1]
         data_as_of = last.time + 60
+        freshness_limit = (self.settings.forex_max_data_age_seconds if INSTRUMENTS[symbol].category == "forex"
+                           else self.settings.max_data_age_seconds)
         result = {"direction": "WAIT", "score": None, "probability": None, "quality": "unavailable",
                   "model": "Logistic regression · v2", "validation": None, "indicators": {},
                   "reasons": ["Модель загружается. Анализ появится после подготовки библиотек."
                               if self.model_status == "loading" else "Библиотеки модели недоступны. Проверьте зависимости сервера."],
                   "model_ready": False}
+        if not ml:
+            result.update(engine="gpt", model="GPT", indicators=indicators(candles),
+                          reasons=["GPT-прогноз ещё не запрошен. Нажмите «Получить сигнал»."], forecast_pending=True)
         async with (self.lock if ml else nullcontext()):
             for _ in range(3):
                 now = int(time.time())
                 entry, lead = plan_entry(data_as_of, entry_at, now=now)
-                if not ml or now - data_as_of > self.settings.max_data_age_seconds or self.analyzer is None:
+                if not ml or now - data_as_of > freshness_limit or self.analyzer is None:
                     break
                 key = symbol, expiry, lead
                 cached = self.cache.get(key)
@@ -64,7 +70,7 @@ class SignalService:
         # Recheck time after potentially expensive training, even for cached models.
         now = int(time.time())
         age = max(0, now - last.time - 60)
-        fresh = age <= self.settings.max_data_age_seconds
+        fresh = age <= freshness_limit
         if not fresh:
             result.update(direction="WAIT", probability=None, quality="unavailable", reasons=["Котировки устарели или рынок закрыт. Для круглосуточного анализа доступны BTC/USDT и ETH/USDT, если их источник отвечает."])
         elif entry - now < 10:
@@ -72,6 +78,7 @@ class SignalService:
         result.update(symbol=symbol, label=INSTRUMENTS[symbol].label, provider=INSTRUMENTS[symbol].provider,
                       category=INSTRUMENTS[symbol].category, expiry=expiry, candle_time=last.time,
                       data_as_of=last.time + 60, data_age_seconds=age, fresh=fresh, price=last.close,
+                      max_data_age_seconds=freshness_limit, delayed=age > 90,
                       entry_at=entry, entry_delay=lead, close_at=entry + expiry * 60, server_time=now,
                       status="scheduled" if result["direction"] != "WAIT" else ("loading" if fresh and self.model_status == "loading" else "unavailable"),
                       change_percent=round((last.close / candles[max(0, len(candles)-61)].close - 1) * 100, 3),
@@ -91,13 +98,21 @@ class SignalService:
         now = int(time.time())
         prediction = review["prediction"]
         snapshot.update(engine="gpt", model=model, model_ready=True, direction=prediction["direction"],
+                        forecast_pending=False, raw_direction=prediction["direction"],
+                        forecast_state="model_wait" if prediction["direction"] == "WAIT" else "ready",
                         reasons=[prediction["summary"], *prediction["risks"]],
                         probability=None, score=None, validation=None, quality="unvalidated",
                         server_time=now, status="scheduled" if prediction["direction"] != "WAIT" else "unavailable",
                         score_note="Для GPT-прогноза вероятность выигрыша не откалибрована.")
-        if now - snapshot["data_as_of"] > self.settings.max_data_age_seconds or snapshot["entry_at"] - now < 10:
+        snapshot["data_age_seconds"] = max(0, now - snapshot["data_as_of"])
+        snapshot["fresh"] = snapshot["data_age_seconds"] <= snapshot.get("max_data_age_seconds", self.settings.max_data_age_seconds)
+        snapshot["delayed"] = snapshot["data_age_seconds"] > 90
+        if not snapshot["fresh"] or snapshot["entry_at"] - now < 10:
             snapshot.update(direction="WAIT", status="unavailable", quality="unavailable",
+                            forecast_state="stale_data" if not snapshot["fresh"] else "expired_entry",
                             reasons=["GPT завершил расчёт после безопасного времени входа или данные устарели. Запросите новый анализ.", *snapshot["reasons"]])
+        if snapshot["delayed"]:
+            snapshot["reasons"].append(f"Свечи источника задержаны на {snapshot['data_age_seconds']} сек; прогноз предварительный.")
         saved = await self.db.save({k: v for k, v in snapshot.items() if k != "candles"})
         return {**saved, "candles": snapshot["candles"], "server_time": now}
 

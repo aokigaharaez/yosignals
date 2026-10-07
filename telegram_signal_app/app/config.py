@@ -24,6 +24,7 @@ class Settings:
     openai_api_key: str = ""
     market_cache_seconds: int = 60
     max_data_age_seconds: int = 90
+    forex_max_data_age_seconds: int = 180
     model_min_score: float = .60
     model_min_validation: float = .54
     auth_max_age_seconds: int = 3600
@@ -72,6 +73,8 @@ def load_settings() -> Settings:
         raise ValueError("Invalid model thresholds")
     if not 1 <= settings.market_cache_seconds <= 120 or not 30 <= settings.max_data_age_seconds <= 180:
         raise ValueError("Invalid market freshness settings")
+    if not 60 <= settings.forex_max_data_age_seconds <= 300:
+        raise ValueError("FOREX_MAX_DATA_AGE_SECONDS must be between 60 and 300")
     if settings.auth_max_age_seconds < 60 or not 1 <= settings.port <= 65535 or settings.owner_id < 0:
         raise ValueError("Invalid server settings")
     return settings

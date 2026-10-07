@@ -118,7 +118,7 @@ class GPTReview:
             result = {"text": text, "model": model, "symbol": snapshot["symbol"],
                     "expiry": snapshot["expiry"], "data_as_of": snapshot["data_as_of"],
                     "generated_at": generated_at,
-                    "stale": generated_at - snapshot["data_as_of"] > self.settings.max_data_age_seconds,
+                    "stale": generated_at - snapshot["data_as_of"] > snapshot.get("max_data_age_seconds", self.settings.max_data_age_seconds),
                     "entry_expired": generated_at >= snapshot.get("entry_at", 0)}
             if signal:
                 try:
