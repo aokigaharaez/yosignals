@@ -20,7 +20,7 @@ function toast(message) { text("toast",message); $("toast").hidden=false; clearT
 async function api(path, options={}) {
   const initData = telegramInitData();
   const headers={...(options.body ? {"Content-Type":"application/json"} : {}), ...(initData ? {Authorization:`tma ${initData}`} : {})};
-  const controller=new AbortController(); const timeout=setTimeout(()=>controller.abort(),25000);
+  const controller=new AbortController(); const timeout=setTimeout(()=>controller.abort(),path==="/api/gpt/review"?95000:25000);
   try {
     const response=await fetch(path,{...options,headers,signal:controller.signal});
     const contentType=response.headers.get("content-type")||"";
@@ -307,6 +307,7 @@ async function boot(){
     text("user-name",state.session.user.first_name);text("avatar",state.session.user.first_name.charAt(0).toUpperCase());
     text("session-mode",state.session.preview?"Локальный просмотр":"Терминал владельцев");text("environment",(state.session.preview?"PREVIEW":"MINI APP")+" · v"+state.session.version);
     $("preview-notice").hidden=!state.session.preview;
+    setupGPT();
     text("forex-status",state.session.forex_ready?"Ключ настроен · доступ проверяется при запросе":"Ожидает API-ключ");$("forex-status").classList.toggle("ready",state.session.forex_ready);
     text("telegram-status",state.session.bot_ready?(state.session.webapp_ready?"Бот и адрес настроены":"Бот подключён · нужен HTTPS-адрес"):(state.session.bot_status==="loading"?"Бот запускается в фоне":"Нужно подключить бота"));$("telegram-status").classList.toggle("ready",state.session.bot_ready&&state.session.webapp_ready);
     if(!state.session.forex_ready){state.category="crypto";state.symbol="BTCUSDT";}
@@ -329,3 +330,25 @@ setInterval(async()=>{
 },15000);
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&state.session&&!state.loading&&!state.analyzing){loadMarket();loadHistory();}});
 boot();
+let gptBusy=false;
+function setupGPT(){
+  const models=state.session.gpt_models||[];
+  $("gpt-model").replaceChildren(...models.map(m=>{const option=document.createElement("option");option.value=m.id;option.textContent=m.label;return option;}));
+  try{const saved=localStorage.getItem("signalLab.gptModel");if(models.some(m=>m.id===saved))$("gpt-model").value=saved;}catch{}
+  $("gpt-button").disabled=!state.session.gpt_ready||state.session.preview;
+  text("gpt-status",state.session.gpt_ready?"API-ключ настроен":"Ожидает OPENAI_API_KEY");
+  if(state.session.preview)text("gpt-help","Для GPT-разбора откройте Mini App в Telegram под аккаунтом владельца.");
+}
+$("gpt-model").addEventListener("change",()=>{try{localStorage.setItem("signalLab.gptModel",$("gpt-model").value);}catch{}});
+$("gpt-button").addEventListener("click",async()=>{
+  if(gptBusy||!state.session||state.session.preview)return;
+  const symbol=state.symbol, expiry=state.expiry, model=$("gpt-model").value;
+  gptBusy=true;$("gpt-button").disabled=true;
+  text("gpt-result","GPT разбирает данные. Это может занять до 75 секунд…");text("gpt-meta",`${symbol} · ${expiry} мин · ${model}`);
+  try{
+    const result=await api("/api/gpt/review",{method:"POST",body:JSON.stringify({symbol,expiry,model})});
+    text("gpt-result",result.text);
+    text("gpt-meta",`${result.symbol} · ${result.expiry} мин · ${result.model} · данные ${clockTime(result.data_as_of)}${result.stale?" · данные устарели":result.entry_expired?" · время входа прошло":""}. Дополнительный разбор; для сделки запросите свежий ML-сигнал.`);
+  }catch(error){text("gpt-result",error.message);toast(error.message);}
+  finally{gptBusy=false;$("gpt-button").disabled=!state.session?.gpt_ready||state.session?.preview;}
+});

@@ -1,0 +1,90 @@
+"""Optional, explicitly requested GPT reviews of server-generated market snapshots."""
+import asyncio
+import json
+import time
+
+import httpx
+
+
+MODELS = {
+    "gpt-6.1-sol": "GPT-6.1 Sol · баланс цены и качества",
+    "gpt-6-luna": "GPT-6 Luna · экономичный",
+    "gpt-6-astra": "GPT-6 Astra · подробный анализ",
+}
+
+
+class GPTError(Exception):
+    def __init__(self, code, message, status=503):
+        self.code, self.message, self.status = code, message, status
+        super().__init__(message)
+
+
+class GPTReview:
+    def __init__(self, settings, client):
+        self.settings, self.client = settings, client
+        self.lock = asyncio.Lock()
+        self.last_request = {}
+
+    async def review(self, snapshot, model, user_id):
+        if model not in MODELS:
+            raise GPTError("unsupported_model", "Выберите модель из списка.", 422)
+        if not self.settings.openai_api_key:
+            raise GPTError("missing_openai_key", "Добавьте OPENAI_API_KEY в Railway Variables и перезапустите сервер.")
+        if not snapshot.get("fresh"):
+            raise GPTError("stale_market", "Для GPT-разбора нужны свежие рыночные данные.", 409)
+        if self.lock.locked():
+            raise GPTError("gpt_busy", "Другой GPT-разбор уже выполняется. Повторите позже.", 429)
+        async with self.lock:
+            now = time.monotonic()
+            if now - self.last_request.get(user_id, -1000) < 60:
+                raise GPTError("gpt_rate_limit", "GPT-разбор доступен раз в минуту для каждого владельца.", 429)
+            self.last_request[user_id] = now
+            context = {k: v for k, v in snapshot.items() if k not in {"candles"}}
+            context["candles"] = snapshot.get("candles", [])[-30:]
+            try:
+                response = await self.client.post(
+                    "https://api.openai.com/v1/responses",
+                    headers={"Authorization": "Bearer " + self.settings.openai_api_key},
+                    timeout=75,
+                    json={"model": model, "store": False, "max_output_tokens": 2200,
+                          "reasoning": {"effort": "low"},
+                          "instructions": (
+                              "Ты аналитический помощник. Ответ на русском, до 250 слов. "
+                              "Разбери только предоставленный сервером снимок внешнего рынка: тренд, "
+                              "импульс, волатильность, аргументы за и против текущего ML-прогноза. "
+                              "Укажи актив, источник и время актуальности. Отмечай отсутствие данных. "
+                              "Не придумывай новости, цены, точность, вероятность успеха или гарантии. "
+                              "Числовую вероятность можно только процитировать из probability с её ограничениями. "
+                              "Это дополнительный разбор, а не новый сигнал. Не назначай новое время входа. "
+                              "При WAIT объясни причину; не превращай его в CALL/PUT. "
+                              "Укажи, что цены Pocket Option могут отличаться, OTC не поддерживается."),
+                          "input": json.dumps(context, ensure_ascii=False, allow_nan=False)},
+                )
+            except httpx.TimeoutException:
+                raise GPTError("gpt_timeout", "OpenAI не ответил вовремя. Текущий ML-сигнал доступен; повторите GPT-разбор позже.") from None
+            except httpx.HTTPError:
+                raise GPTError("gpt_network", "Не удалось подключиться к OpenAI. Повторите позже.") from None
+            if response.status_code != 200:
+                messages = {
+                    401: "OpenAI отклонил API-ключ. Проверьте OPENAI_API_KEY в Railway.",
+                    403: "Нет доступа к OpenAI или выбранной модели для этого проекта.",
+                    404: "Выбранная модель недоступна для API-ключа. Попробуйте другую.",
+                    429: "Лимит OpenAI или баланс API исчерпан. Проверьте Billing и Limits.",
+                    400: "OpenAI отклонил запрос к выбранной модели. Попробуйте другую модель.",
+                }
+                raise GPTError("gpt_provider_error", messages.get(response.status_code, "Ошибка OpenAI. Повторите позже."))
+            try:
+                data = response.json()
+                text = "\n".join(part["text"] for item in data.get("output", [])
+                                 if item.get("type") == "message" and item.get("role") == "assistant"
+                                 for part in item.get("content", []) if part.get("type") == "output_text").strip()
+                if data.get("status") != "completed" or not text:
+                    raise ValueError("Incomplete response")
+            except (ValueError, TypeError, KeyError, AttributeError):
+                raise GPTError("gpt_empty", "OpenAI не завершил разбор. Попробуйте другую модель или повторите позже.") from None
+            generated_at = int(time.time())
+            return {"text": text, "model": model, "symbol": snapshot["symbol"],
+                    "expiry": snapshot["expiry"], "data_as_of": snapshot["data_as_of"],
+                    "generated_at": generated_at,
+                    "stale": generated_at - snapshot["data_as_of"] > self.settings.max_data_age_seconds,
+                    "entry_expired": generated_at >= snapshot.get("entry_at", 0)}

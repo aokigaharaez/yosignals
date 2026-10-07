@@ -185,10 +185,16 @@ def test_api_auth_preview_cannot_write_and_owner_isolation(app):
         assert client.get("/api/session").json()["preview"]
         assert client.get("/api/history").status_code==401
         assert client.post("/api/analyses",json={"symbol":"EURUSD","expiry":3}).status_code==401
+        assert client.post("/api/gpt/review",json={"symbol":"EURUSD","expiry":3}).status_code==401
         assert client.get("/api/session",headers={"Origin":"https://evil.example"}).status_code==401
         assert client.get("/api/history",headers={"Authorization":"tma "+signed(user=43)}).status_code==403
+        assert client.post("/api/gpt/review",json={"symbol":"EURUSD","expiry":3},
+                           headers={"Authorization":"tma "+signed(user=43)}).status_code==403
         client.headers["Authorization"]="tma "+signed()
         assert not client.get("/api/session").json()["preview"]
+        assert not client.get("/api/session").json()["gpt_ready"]
+        assert "openai_api_key" not in client.get("/api/session").json()
+        assert client.post("/api/gpt/review",json={"symbol":"EURUSD","expiry":3}).json()["code"]=="missing_openai_key"
         assert client.get("/api/history").json()["items"]==[]
         assert client.get("/api/market?symbol=EURUSD").json()["code"]=="missing_key"
         assert client.get("/api/market?symbol=EURUSD_OTC").json()["code"]=="unsupported"
@@ -196,6 +202,30 @@ def test_api_auth_preview_cannot_write_and_owner_isolation(app):
         unavailable = client.put("/api/watch",json={"enabled":True,"symbol":"EURUSD","expiry":3})
         assert unavailable.status_code==503 and unavailable.json()["code"]=="missing_key"
         assert client.post("/api/history/999/result",json={"result":"WIN"}).status_code==409
+
+
+def test_gpt_endpoint_uses_server_snapshot_and_authenticated_owner(tmp_path):
+    settings = Settings(bot_token=TOKEN, owner_id=42, bot_enabled=False,
+                        openai_api_key="test-secret", db_path=str(tmp_path / "gpt.db"))
+    app = create_app(settings)
+    calls = []
+    async def snapshot(symbol, expiry):
+        return {"symbol": symbol, "expiry": expiry, "fresh": True, "data_as_of": 123}
+    async def review(data, model, user_id):
+        calls.append((data, model, user_id))
+        return {"text": "Разбор", "model": model}
+    with TestClient(app) as client:
+        app.state.service.snapshot = snapshot
+        app.state.gpt.review = review
+        auth = {"Authorization": "tma " + signed()}
+        response = client.post("/api/gpt/review", headers=auth,
+                               json={"symbol": "BTCUSDT", "expiry": 3, "model": "gpt-6-astra"})
+        assert response.status_code == 200 and response.json()["text"] == "Разбор"
+        assert calls == [({"symbol": "BTCUSDT", "expiry": 3, "fresh": True, "data_as_of": 123}, "gpt-6-astra", 42)]
+        assert client.post("/api/gpt/review", headers=auth,
+                           json={"symbol": "BTCUSDT", "model": "unknown"}).status_code == 422
+        assert len(calls) == 1
+        assert "test-secret" not in client.get("/api/session", headers=auth).text
 
 
 def test_remote_requests_never_gain_preview_access(app):

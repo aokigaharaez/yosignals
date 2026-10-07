@@ -26,6 +26,7 @@ from .market import MarketData, MarketError
 from .models import INSTRUMENTS, EXPIRIES
 from .services import SignalService
 from .scheduler import SignalScheduler
+from .gpt import GPTReview, GPTError, MODELS
 
 STATIC = Path(__file__).parent / "static"
 log = logging.getLogger(__name__)
@@ -39,6 +40,10 @@ class AnalysisRequest(BaseModel):
 
 class WatchRequest(AnalysisRequest):
     enabled: bool
+
+
+class GPTRequest(AnalysisRequest):
+    model: Literal["gpt-6.1-sol", "gpt-6-luna", "gpt-6-astra"] = "gpt-6.1-sol"
 
 
 class ResultRequest(BaseModel):
@@ -63,6 +68,7 @@ def create_app(settings: Settings) -> FastAPI:
             market = MarketData(settings, client)
             service = SignalService(settings, market, db)
             app.state.service, app.state.db = service, db
+            app.state.gpt = GPTReview(settings, client)
             app.state.bot_ready = False
             app.state.bot_status = "disabled" if not settings.bot_enabled else "not_configured"
             app.state.scheduler = SignalScheduler(settings, db, service)
@@ -141,6 +147,10 @@ def create_app(settings: Settings) -> FastAPI:
     async def market_error(request: Request, exc: MarketError):
         return JSONResponse(status_code=503, content={"code": exc.code, "detail": exc.message})
 
+    @app.exception_handler(GPTError)
+    async def gpt_error(request: Request, exc: GPTError):
+        return JSONResponse(status_code=exc.status, content={"code": exc.code, "detail": exc.message})
+
     @app.exception_handler(Exception)
     async def unexpected_error(request: Request, exc: Exception):
         # Keep internal details out of Telegram responses, but leave a traceback in Railway logs.
@@ -152,7 +162,7 @@ def create_app(settings: Settings) -> FastAPI:
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "version": "2.4", "delivery": "miniapp"}
+        return {"status": "ok", "version": "2.5", "delivery": "miniapp"}
 
     @app.get("/api/session")
     async def session(request: Request):
@@ -163,7 +173,9 @@ def create_app(settings: Settings) -> FastAPI:
                 "bot_status": app.state.bot_status, "model_status": app.state.service.model_status,
                 "forex_ready": bool(settings.twelve_data_api_key), "webapp_ready": bool(settings.webapp_url),
                 "min_score": settings.model_min_score * 100, "max_data_age_seconds": settings.max_data_age_seconds,
-                "delivery": "miniapp", "version": "2.4",
+                "delivery": "miniapp", "version": "2.5",
+                "gpt_ready": bool(settings.openai_api_key),
+                "gpt_models": [{"id": k, "label": v} for k, v in MODELS.items()],
                 "instruments": [asdict(i) for i in INSTRUMENTS.values()], "expiries": EXPIRIES}
 
     @app.get("/api/market")
@@ -176,6 +188,15 @@ def create_app(settings: Settings) -> FastAPI:
     async def create_analysis(request: Request, body: AnalysisRequest):
         rate_limit(await user(request))
         return await app.state.service.create(body.symbol, body.expiry)
+
+    @app.post("/api/gpt/review")
+    async def gpt_review(request: Request, body: GPTRequest):
+        identity = await user(request)
+        rate_limit(identity)
+        if not settings.openai_api_key:
+            raise GPTError("missing_openai_key", "Добавьте OPENAI_API_KEY в Railway Variables и перезапустите сервер.")
+        snapshot = await app.state.service.snapshot(body.symbol, body.expiry)
+        return await app.state.gpt.review(snapshot, body.model, identity["id"])
 
     @app.get("/api/history")
     async def history(request: Request):

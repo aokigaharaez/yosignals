@@ -61,6 +61,15 @@
       <section class="method-card"><span class="method-icon">✳</span><div><h3>Прозрачный анализ</h3><p>Направление, шанс по модели и проверка качества видны отдельно.</p><button data-page="connections" class="text-button">Как это работает <span>↗</span></button></div></section>
     </div>
     <section class="panel recent-panel"><div class="panel-heading"><div class="section-title"><svg><use href="#i-clock"/></svg><h2>Сигналы в Mini App</h2></div><button data-page="history" class="text-button">Вся история ↗</button></div><div id="recent-list" class="recent-content"><div class="empty-inline">Нажмите «Получить сигнал»: здесь появятся направление, шанс по модели и время входа.</div></div></section>
+    <section class="panel connection-card gpt-panel" aria-label="Дополнительный GPT-разбор">
+      <div class="panel-heading"><h2>GPT-разбор рынка</h2><span class="connection-status" id="gpt-status">Проверка подключения</span></div>
+      <p>Дополнительный разбор свечей, индикаторов и текущего ML-прогноза. Запрос оплачивается из вашего OpenAI API-баланса.</p>
+      <label class="field-label" for="gpt-model">Модель GPT</label>
+      <select id="gpt-model" aria-label="Модель GPT"></select>
+      <p id="gpt-help">Добавьте OPENAI_API_KEY в Railway Variables и перезапустите приложение. Ключ хранится на сервере. Доступность моделей зависит от API-проекта.</p>
+      <button class="button secondary" id="gpt-button" disabled>Разобрать рынок с GPT</button>
+      <p id="gpt-meta"></p><div id="gpt-result" class="gpt-result" role="status" aria-live="polite">Выберите модель и запросите разбор.</div>
+    </section>
     <footer>Signal Lab <span>·</span> Аналитический инструмент, не гарантия дохода. Котировки могут отличаться от Pocket Option.</footer>
   </div>
   <div class="page" id="history-page" hidden><section class="page-heading"><div><div class="eyebrow">ВАШ ТОРГОВЫЙ ЖУРНАЛ</div><h1>Сигналы и история<span>.</span></h1><p>Результаты отмечаются по фактической сделке в Pocket Option.</p></div></section><div class="history-stats" id="history-stats"></div><section class="panel"><div class="panel-heading"><h2>Анализы и результаты</h2><button id="history-refresh" class="text-button">Обновить ↻</button></div><div id="history-list"></div></section><p class="footnote">WIN / LOSS / DRAW — ваши отметки, не автоматическая проверка брокера. Старые ручные сигналы сохранены в прежней таблице базы.</p></div>
