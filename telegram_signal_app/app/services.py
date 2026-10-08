@@ -48,7 +48,7 @@ class SignalService:
         freshness_limit = (self.settings.forex_max_data_age_seconds if INSTRUMENTS[symbol].category == "forex"
                            else self.settings.max_data_age_seconds)
         result = {"direction": "WAIT", "score": None, "probability": None, "quality": "unavailable",
-                  "model": "Adaptive ML · v5", "validation": None, "indicators": {},
+                  "model": "Adaptive ML · v6", "validation": None, "indicators": {},
                   "reasons": ["Модель загружается. Анализ появится после подготовки библиотек."
                               if self.model_status == "loading" else "Библиотеки модели недоступны. Проверьте зависимости сервера."],
                   "model_ready": False}
@@ -119,6 +119,16 @@ class SignalService:
                       candles=[c.to_dict() for c in candles[-120:]], sample_count=len(candles),
                       price_note="Внешние котировки. Сверьте актив и цену в Pocket Option; OTC не поддерживается.",
                       score_note="Оценка успеха направления на внешнем рынке. Вероятность выигрыша в Pocket Option не проверена.")
+        if ml:
+            result["model_version"] = "ml-v6"
+            performance = getattr(self, "performance", None)
+            observed = await performance.group(result) if performance and result.get("model_ready") else None
+            result["forward_validation"] = observed
+            if observed and observed["samples"] >= self.settings.model_min_test_signals and not observed["passed"]:
+                result["signal_eligible"] = False
+                result["reasons"].append("Цель не подтверждена новыми независимыми исходами этой модели.")
+            if result.get("model_ready") and not result.get("signal_eligible"):
+                result["quality"] = "weak"
         return result
 
     async def _train(self, key, trainer, candles, expiry, lead):
@@ -138,7 +148,7 @@ class SignalService:
             task.cancel()
         await asyncio.gather(*self.training_tasks.values(), return_exceptions=True)
 
-    async def create_gpt(self, symbol, expiry, model, user_id, gpt, entry_at=None):
+    async def create_gpt(self, symbol, expiry, model, user_id, gpt, entry_at=None, strict=False):
         validate_entry(entry_at, now=int(time.time()))
         snapshot = await self.snapshot(symbol, expiry, ml=False, **({"entry_at": entry_at} if entry_at is not None else {}))
         # Reserve time for the API before the scheduled entry; never shift a completed forecast.
@@ -151,6 +161,10 @@ class SignalService:
         review = await gpt.review(snapshot, model, user_id, signal=True)
         now = int(time.time())
         prediction = review["prediction"]
+        snapshot["prompt_version"] = review.get("prompt_version", "market-v6")
+        snapshot["constituent_forecasts"] = review.get("constituent_forecasts", [])
+        snapshot["input_hash"] = review.get("input_hash")
+        snapshot["consensus"] = review.get("consensus")
         snapshot.update(engine="gpt", model=model, model_ready=True, direction=prediction["direction"],
                         forecast_pending=False, raw_direction=prediction["direction"],
                         forecast_state="model_wait" if prediction["direction"] == "WAIT" else "ready",
@@ -167,6 +181,15 @@ class SignalService:
                             reasons=["GPT завершил расчёт после безопасного времени входа или данные устарели. Запросите новый анализ.", *snapshot["reasons"]])
         if snapshot["delayed"]:
             snapshot["reasons"].append(f"Свечи источника задержаны на {snapshot['data_age_seconds']} сек; прогноз предварительный.")
+        performance = getattr(self, "performance", None)
+        observed = await performance.group(snapshot) if performance else None
+        snapshot["forward_validation"] = observed
+        snapshot["signal_eligible"] = bool(observed and observed["passed"] and snapshot["fresh"] and snapshot["direction"] != "WAIT")
+        if snapshot["signal_eligible"]:
+            snapshot["quality"] = "forward_verified"
+        if strict and snapshot["direction"] != "WAIT" and not snapshot["signal_eligible"]:
+            snapshot.update(direction="WAIT", status="filtered", quality="unavailable",
+                reasons=["Цель качества не подтверждена независимыми исходами этой GPT-модели. Предварительный прогноз сохранён для проверки.", *snapshot["reasons"]])
         saved = await self.db.save({k: v for k, v in snapshot.items() if k != "candles"})
         return {**saved, "candles": snapshot["candles"], "server_time": now}
 

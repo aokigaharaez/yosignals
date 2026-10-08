@@ -1,0 +1,2956 @@
+{
+  "protocol": "preregistered_v6_56_features_10_candidates_50_15_15_20_purged_train_only_choice_final_diagnostics",
+  "data_status": "new_nonoverlapping_historical_block_not_future_guarantee",
+  "code_sha256": {
+    "app/analysis.py": "94cb0462f36835b669c810054726211e649f823a3a23f7ee4d4d3a344d3c5bce",
+    "app/config.py": "0324a103c32d9f392de6a33508a5c1061b6df3fa66afca3b50c2e42cc378a470",
+    "app/evaluate.py": "9e5031279bc7f07e939d52a3dc01b075d90d31d8fc67d1829bc46a310c9f44bb"
+  },
+  "data_manifest": {
+    "symbol": "EURUSD",
+    "provider": "Twelve Data",
+    "candles": 20000,
+    "first_time": 1787852580,
+    "last_time": 1789052520,
+    "previous_research_first_time": 1789052580,
+    "overlap_with_previous_research": false,
+    "sha256": "e28a996f340400d93fbd793539e8fc28ae8a8dae99b840c7f4452f0ba01c4e8e",
+    "protocol": "Freeze v6 before first evaluation; train-only selection; four fixed expiries1/3/5/15; report all candidates without choosing on final test"
+  },
+  "complete": true,
+  "reports": [
+    {
+      "selected_before_final": "boosting",
+      "selection_method": "purged_expanding_training_only",
+      "reports": [
+        {
+          "candidate": "legacy_linear",
+          "selected_inside_train": false,
+          "training_log_loss": 0.6828,
+          "validation": {
+            "samples": 1988,
+            "training_samples": 8766,
+            "calibration_samples": 1490,
+            "policy_samples": 1490,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 55.5,
+            "baseline": 55.5,
+            "selected_samples": 1161,
+            "selected_accuracy": 58.4,
+            "brier_score": 0.2493,
+            "model_selection": {
+              "selected": "legacy_linear",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 2743,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2401,
+                "validation_brier": 0.2401,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 10,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456120,
+            "probability_calibration_until": 1788634980,
+            "policy_selection_until": 1788813840,
+            "final_test_start": 1788813960,
+            "evaluated_until": 1789052520,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 44.1,
+            "method": "historical_bin",
+            "samples": 551,
+            "wins": 243,
+            "interval": [
+              40.0,
+              48.3
+            ],
+            "note": "Калибровка по 551 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 1.27
+        },
+        {
+          "candidate": "expanded_linear",
+          "selected_inside_train": false,
+          "training_log_loss": 0.7525,
+          "validation": {
+            "samples": 1988,
+            "training_samples": 8766,
+            "calibration_samples": 1490,
+            "policy_samples": 1490,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 52.5,
+            "baseline": 55.5,
+            "selected_samples": 1112,
+            "selected_accuracy": 57.4,
+            "brier_score": 0.2463,
+            "model_selection": {
+              "selected": "expanded_linear",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 2743,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2376,
+                "validation_brier": 0.2376,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": 0.85,
+              "regime": "all",
+              "calibration_samples": 154,
+              "calibration_wins": 137,
+              "calibration_accuracy": 89.0,
+              "policies_considered": 72,
+              "samples": 9,
+              "wins": 6,
+              "accuracy": 66.7,
+              "interval": [
+                35.4,
+                87.9
+              ],
+              "coverage": 0.5,
+              "recent_accuracy": 80.0,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456120,
+            "probability_calibration_until": 1788634980,
+            "policy_selection_until": 1788813840,
+            "final_test_start": 1788813960,
+            "evaluated_until": 1789052520,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 56.3,
+            "method": "historical_bin",
+            "samples": 419,
+            "wins": 236,
+            "interval": [
+              51.5,
+              61.0
+            ],
+            "note": "Калибровка по 419 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 2.11
+        },
+        {
+          "candidate": "regularized_linear",
+          "selected_inside_train": false,
+          "training_log_loss": 0.7368,
+          "validation": {
+            "samples": 1988,
+            "training_samples": 8766,
+            "calibration_samples": 1490,
+            "policy_samples": 1490,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 52.5,
+            "baseline": 55.5,
+            "selected_samples": 1096,
+            "selected_accuracy": 57.4,
+            "brier_score": 0.247,
+            "model_selection": {
+              "selected": "regularized_linear",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 2743,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2372,
+                "validation_brier": 0.2372,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": 0.8,
+              "regime": "all",
+              "calibration_samples": 340,
+              "calibration_wins": 287,
+              "calibration_accuracy": 84.4,
+              "policies_considered": 72,
+              "samples": 57,
+              "wins": 40,
+              "accuracy": 70.2,
+              "interval": [
+                57.3,
+                80.5
+              ],
+              "coverage": 2.9,
+              "recent_accuracy": 75.9,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456120,
+            "probability_calibration_until": 1788634980,
+            "policy_selection_until": 1788813840,
+            "final_test_start": 1788813960,
+            "evaluated_until": 1789052520,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 56.4,
+            "method": "historical_bin",
+            "samples": 429,
+            "wins": 242,
+            "interval": [
+              51.7,
+              61.0
+            ],
+            "note": "Калибровка по 429 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 1.75
+        },
+        {
+          "candidate": "boosting",
+          "selected_inside_train": true,
+          "training_log_loss": 0.6688,
+          "validation": {
+            "samples": 1988,
+            "training_samples": 8766,
+            "calibration_samples": 1490,
+            "policy_samples": 1490,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 55.0,
+            "baseline": 55.5,
+            "selected_samples": 955,
+            "selected_accuracy": 59.4,
+            "brier_score": 0.2456,
+            "model_selection": {
+              "selected": "boosting",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 2743,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2347,
+                "validation_brier": 0.2347,
+                "validation_auc": null
+              },
+              "log_loss": {
+                "legacy_linear": 0.6828,
+                "expanded_linear": 0.7525,
+                "regularized_linear": 0.7368,
+                "boosting": 0.6688,
+                "extra_trees": 0.695,
+                "ensemble": 0.6801,
+                "strong_linear": 0.6762,
+                "shallow_boosting": 0.6675,
+                "deep_boosting": 0.674,
+                "shallow_trees": 0.6916
+              },
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": 0.9,
+              "regime": "all",
+              "calibration_samples": 265,
+              "calibration_wins": 227,
+              "calibration_accuracy": 85.7,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456120,
+            "probability_calibration_until": 1788634980,
+            "policy_selection_until": 1788813840,
+            "final_test_start": 1788813960,
+            "evaluated_until": 1789052520,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 48.6,
+            "method": "historical_bin",
+            "samples": 590,
+            "wins": 287,
+            "interval": [
+              44.6,
+              52.7
+            ],
+            "note": "Калибровка по 590 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 0.0
+        },
+        {
+          "candidate": "extra_trees",
+          "selected_inside_train": false,
+          "training_log_loss": 0.695,
+          "validation": {
+            "samples": 1988,
+            "training_samples": 8766,
+            "calibration_samples": 1490,
+            "policy_samples": 1490,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 55.6,
+            "baseline": 55.5,
+            "selected_samples": 892,
+            "selected_accuracy": 59.0,
+            "brier_score": 0.2459,
+            "model_selection": {
+              "selected": "extra_trees",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 2743,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2352,
+                "validation_brier": 0.2352,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456120,
+            "probability_calibration_until": 1788634980,
+            "policy_selection_until": 1788813840,
+            "final_test_start": 1788813960,
+            "evaluated_until": 1789052520,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 48.6,
+            "method": "historical_bin",
+            "samples": 609,
+            "wins": 296,
+            "interval": [
+              44.7,
+              52.6
+            ],
+            "note": "Калибровка по 609 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 12.1
+        },
+        {
+          "candidate": "ensemble",
+          "selected_inside_train": false,
+          "training_log_loss": 0.6801,
+          "validation": {
+            "samples": 1988,
+            "training_samples": 8766,
+            "calibration_samples": 1490,
+            "policy_samples": 1490,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 54.8,
+            "baseline": 55.5,
+            "selected_samples": 924,
+            "selected_accuracy": 60.4,
+            "brier_score": 0.2454,
+            "model_selection": {
+              "selected": "ensemble",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 2743,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2327,
+                "validation_brier": 0.2327,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": 0.85,
+              "regime": "all",
+              "calibration_samples": 301,
+              "calibration_wins": 262,
+              "calibration_accuracy": 87.0,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456120,
+            "probability_calibration_until": 1788634980,
+            "policy_selection_until": 1788813840,
+            "final_test_start": 1788813960,
+            "evaluated_until": 1789052520,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 46.4,
+            "method": "historical_bin",
+            "samples": 571,
+            "wins": 265,
+            "interval": [
+              42.4,
+              50.5
+            ],
+            "note": "Калибровка по 571 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 17.59
+        },
+        {
+          "candidate": "strong_linear",
+          "selected_inside_train": false,
+          "training_log_loss": 0.6762,
+          "validation": {
+            "samples": 1988,
+            "training_samples": 8766,
+            "calibration_samples": 1490,
+            "policy_samples": 1490,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 53.9,
+            "baseline": 55.5,
+            "selected_samples": 1016,
+            "selected_accuracy": 58.3,
+            "brier_score": 0.247,
+            "model_selection": {
+              "selected": "strong_linear",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 2743,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2355,
+                "validation_brier": 0.2355,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": 0.8,
+              "regime": "all",
+              "calibration_samples": 188,
+              "calibration_wins": 164,
+              "calibration_accuracy": 87.2,
+              "policies_considered": 72,
+              "samples": 9,
+              "wins": 7,
+              "accuracy": 77.8,
+              "interval": [
+                45.3,
+                93.7
+              ],
+              "coverage": 0.5,
+              "recent_accuracy": 60.0,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456120,
+            "probability_calibration_until": 1788634980,
+            "policy_selection_until": 1788813840,
+            "final_test_start": 1788813960,
+            "evaluated_until": 1789052520,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 54.4,
+            "method": "historical_bin",
+            "samples": 445,
+            "wins": 242,
+            "interval": [
+              49.7,
+              59.0
+            ],
+            "note": "Калибровка по 445 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 2.19
+        },
+        {
+          "candidate": "shallow_boosting",
+          "selected_inside_train": false,
+          "training_log_loss": 0.6675,
+          "validation": {
+            "samples": 1988,
+            "training_samples": 8766,
+            "calibration_samples": 1490,
+            "policy_samples": 1490,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 55.5,
+            "baseline": 55.5,
+            "selected_samples": 810,
+            "selected_accuracy": 58.3,
+            "brier_score": 0.2483,
+            "model_selection": {
+              "selected": "shallow_boosting",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 2743,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.236,
+                "validation_brier": 0.236,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456120,
+            "probability_calibration_until": 1788634980,
+            "policy_selection_until": 1788813840,
+            "final_test_start": 1788813960,
+            "evaluated_until": 1789052520,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 47.3,
+            "method": "historical_bin",
+            "samples": 672,
+            "wins": 318,
+            "interval": [
+              43.6,
+              51.1
+            ],
+            "note": "Калибровка по 672 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 3.88
+        },
+        {
+          "candidate": "deep_boosting",
+          "selected_inside_train": false,
+          "training_log_loss": 0.674,
+          "validation": {
+            "samples": 1988,
+            "training_samples": 8766,
+            "calibration_samples": 1490,
+            "policy_samples": 1490,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 54.6,
+            "baseline": 55.5,
+            "selected_samples": 973,
+            "selected_accuracy": 57.9,
+            "brier_score": 0.2479,
+            "model_selection": {
+              "selected": "deep_boosting",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 2743,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2321,
+                "validation_brier": 0.2321,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": 0.85,
+              "regime": "all",
+              "calibration_samples": 412,
+              "calibration_wins": 348,
+              "calibration_accuracy": 84.5,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456120,
+            "probability_calibration_until": 1788634980,
+            "policy_selection_until": 1788813840,
+            "final_test_start": 1788813960,
+            "evaluated_until": 1789052520,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 46.1,
+            "method": "historical_bin",
+            "samples": 516,
+            "wins": 238,
+            "interval": [
+              41.9,
+              50.4
+            ],
+            "note": "Калибровка по 516 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 8.18
+        },
+        {
+          "candidate": "shallow_trees",
+          "selected_inside_train": false,
+          "training_log_loss": 0.6916,
+          "validation": {
+            "samples": 1988,
+            "training_samples": 8766,
+            "calibration_samples": 1490,
+            "policy_samples": 1490,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 55.3,
+            "baseline": 55.5,
+            "selected_samples": 869,
+            "selected_accuracy": 59.0,
+            "brier_score": 0.2475,
+            "model_selection": {
+              "selected": "shallow_trees",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 2743,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2367,
+                "validation_brier": 0.2367,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456120,
+            "probability_calibration_until": 1788634980,
+            "policy_selection_until": 1788813840,
+            "final_test_start": 1788813960,
+            "evaluated_until": 1789052520,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 47.1,
+            "method": "historical_bin",
+            "samples": 603,
+            "wins": 284,
+            "interval": [
+              43.1,
+              51.1
+            ],
+            "note": "Калибровка по 603 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 10.02
+        }
+      ],
+      "target": 80.0,
+      "seconds": 143.07,
+      "protocol": "fixed_candidates_train_only_selection_separate_calibration_policy_frozen_final",
+      "note": "Диагностика внешних котировок. Итоговый тест не выбирает модель. Повторно изученный архив — исследование, а не новый независимый результат.",
+      "symbol": "EURUSD",
+      "expiry": 1,
+      "entry_delay": 1,
+      "provider": "Twelve Data",
+      "history_candles": 20000,
+      "first_time": 1787852580,
+      "data_as_of": 1789052580,
+      "archive_sha256": "bfabd05a28705787f75f89fe366075785e35d2064d63e35c868626bbfaf2d245",
+      "data_status": "historical_not_forward_verified",
+      "method": "one_frozen_chronological_four_way_partition"
+    },
+    {
+      "selected_before_final": "boosting",
+      "selection_method": "purged_expanding_training_only",
+      "reports": [
+        {
+          "candidate": "legacy_linear",
+          "selected_inside_train": false,
+          "training_log_loss": 0.6987,
+          "validation": {
+            "samples": 994,
+            "training_samples": 9212,
+            "calibration_samples": 745,
+            "policy_samples": 745,
+            "uncalibrated_test_samples": 6,
+            "accuracy": 56.4,
+            "baseline": 53.6,
+            "selected_samples": 270,
+            "selected_accuracy": 57.0,
+            "brier_score": 0.251,
+            "model_selection": {
+              "selected": "legacy_linear",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 1420,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2528,
+                "validation_brier": 0.2528,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 10,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456060,
+            "probability_calibration_until": 1788634920,
+            "policy_selection_until": 1788813780,
+            "final_test_start": 1788813840,
+            "evaluated_until": 1789052400,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 47.9,
+            "method": "historical_bin",
+            "samples": 518,
+            "wins": 248,
+            "interval": [
+              43.6,
+              52.2
+            ],
+            "note": "Калибровка по 518 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 1.32
+        },
+        {
+          "candidate": "expanded_linear",
+          "selected_inside_train": false,
+          "training_log_loss": 0.7596,
+          "validation": {
+            "samples": 994,
+            "training_samples": 9212,
+            "calibration_samples": 745,
+            "policy_samples": 745,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 54.6,
+            "baseline": 53.6,
+            "selected_samples": 317,
+            "selected_accuracy": 58.4,
+            "brier_score": 0.2511,
+            "model_selection": {
+              "selected": "expanded_linear",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 1420,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2592,
+                "validation_brier": 0.2592,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456060,
+            "probability_calibration_until": 1788634920,
+            "policy_selection_until": 1788813780,
+            "final_test_start": 1788813840,
+            "evaluated_until": 1789052400,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 46.3,
+            "method": "historical_bin",
+            "samples": 363,
+            "wins": 168,
+            "interval": [
+              41.2,
+              51.4
+            ],
+            "note": "Калибровка по 363 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 1.99
+        },
+        {
+          "candidate": "regularized_linear",
+          "selected_inside_train": false,
+          "training_log_loss": 0.7442,
+          "validation": {
+            "samples": 994,
+            "training_samples": 9212,
+            "calibration_samples": 745,
+            "policy_samples": 745,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 55.4,
+            "baseline": 53.6,
+            "selected_samples": 300,
+            "selected_accuracy": 59.7,
+            "brier_score": 0.2506,
+            "model_selection": {
+              "selected": "regularized_linear",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 1420,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2584,
+                "validation_brier": 0.2584,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456060,
+            "probability_calibration_until": 1788634920,
+            "policy_selection_until": 1788813780,
+            "final_test_start": 1788813840,
+            "evaluated_until": 1789052400,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 47.3,
+            "method": "historical_bin",
+            "samples": 364,
+            "wins": 172,
+            "interval": [
+              42.2,
+              52.4
+            ],
+            "note": "Калибровка по 364 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 1.59
+        },
+        {
+          "candidate": "boosting",
+          "selected_inside_train": true,
+          "training_log_loss": 0.6861,
+          "validation": {
+            "samples": 994,
+            "training_samples": 9212,
+            "calibration_samples": 745,
+            "policy_samples": 745,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 53.7,
+            "baseline": 53.6,
+            "selected_samples": 24,
+            "selected_accuracy": 54.2,
+            "brier_score": 0.2506,
+            "model_selection": {
+              "selected": "boosting",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 1420,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2472,
+                "validation_brier": 0.2472,
+                "validation_auc": null
+              },
+              "log_loss": {
+                "legacy_linear": 0.6987,
+                "expanded_linear": 0.7596,
+                "regularized_linear": 0.7442,
+                "boosting": 0.6861,
+                "extra_trees": 0.6976,
+                "ensemble": 0.6945,
+                "strong_linear": 0.6914,
+                "shallow_boosting": 0.6855,
+                "deep_boosting": 0.6905,
+                "shallow_trees": 0.6969
+              },
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456060,
+            "probability_calibration_until": 1788634920,
+            "policy_selection_until": 1788813780,
+            "final_test_start": 1788813840,
+            "evaluated_until": 1789052400,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 49.5,
+            "method": "historical_bin",
+            "samples": 501,
+            "wins": 248,
+            "interval": [
+              45.1,
+              53.9
+            ],
+            "note": "Калибровка по 501 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 0.0
+        },
+        {
+          "candidate": "extra_trees",
+          "selected_inside_train": false,
+          "training_log_loss": 0.6976,
+          "validation": {
+            "samples": 994,
+            "training_samples": 9212,
+            "calibration_samples": 745,
+            "policy_samples": 745,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 52.4,
+            "baseline": 53.6,
+            "selected_samples": 29,
+            "selected_accuracy": 65.5,
+            "brier_score": 0.2498,
+            "model_selection": {
+              "selected": "extra_trees",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 1420,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2463,
+                "validation_brier": 0.2463,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456060,
+            "probability_calibration_until": 1788634920,
+            "policy_selection_until": 1788813780,
+            "final_test_start": 1788813840,
+            "evaluated_until": 1789052400,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 51.8,
+            "method": "historical_bin",
+            "samples": 523,
+            "wins": 271,
+            "interval": [
+              47.5,
+              56.1
+            ],
+            "note": "Калибровка по 523 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 13.04
+        },
+        {
+          "candidate": "ensemble",
+          "selected_inside_train": false,
+          "training_log_loss": 0.6945,
+          "validation": {
+            "samples": 994,
+            "training_samples": 9212,
+            "calibration_samples": 745,
+            "policy_samples": 745,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 53.9,
+            "baseline": 53.6,
+            "selected_samples": 66,
+            "selected_accuracy": 59.1,
+            "brier_score": 0.2489,
+            "model_selection": {
+              "selected": "ensemble",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 1420,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2477,
+                "validation_brier": 0.2477,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456060,
+            "probability_calibration_until": 1788634920,
+            "policy_selection_until": 1788813780,
+            "final_test_start": 1788813840,
+            "evaluated_until": 1789052400,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 51.3,
+            "method": "historical_bin",
+            "samples": 491,
+            "wins": 252,
+            "interval": [
+              46.9,
+              55.7
+            ],
+            "note": "Калибровка по 491 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 17.38
+        },
+        {
+          "candidate": "strong_linear",
+          "selected_inside_train": false,
+          "training_log_loss": 0.6914,
+          "validation": {
+            "samples": 994,
+            "training_samples": 9212,
+            "calibration_samples": 745,
+            "policy_samples": 745,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 54.1,
+            "baseline": 53.6,
+            "selected_samples": 155,
+            "selected_accuracy": 57.4,
+            "brier_score": 0.2526,
+            "model_selection": {
+              "selected": "strong_linear",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 1420,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2502,
+                "validation_brier": 0.2502,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456060,
+            "probability_calibration_until": 1788634920,
+            "policy_selection_until": 1788813780,
+            "final_test_start": 1788813840,
+            "evaluated_until": 1789052400,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 46.4,
+            "method": "historical_bin",
+            "samples": 423,
+            "wins": 196,
+            "interval": [
+              41.6,
+              51.1
+            ],
+            "note": "Калибровка по 423 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 0.99
+        },
+        {
+          "candidate": "shallow_boosting",
+          "selected_inside_train": false,
+          "training_log_loss": 0.6855,
+          "validation": {
+            "samples": 994,
+            "training_samples": 9212,
+            "calibration_samples": 745,
+            "policy_samples": 745,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 53.9,
+            "baseline": 53.6,
+            "selected_samples": 7,
+            "selected_accuracy": 85.7,
+            "brier_score": 0.2524,
+            "model_selection": {
+              "selected": "shallow_boosting",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 1420,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2478,
+                "validation_brier": 0.2478,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456060,
+            "probability_calibration_until": 1788634920,
+            "policy_selection_until": 1788813780,
+            "final_test_start": 1788813840,
+            "evaluated_until": 1789052400,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 47.6,
+            "method": "historical_bin",
+            "samples": 546,
+            "wins": 260,
+            "interval": [
+              43.5,
+              51.8
+            ],
+            "note": "Калибровка по 546 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 3.4
+        },
+        {
+          "candidate": "deep_boosting",
+          "selected_inside_train": false,
+          "training_log_loss": 0.6905,
+          "validation": {
+            "samples": 994,
+            "training_samples": 9212,
+            "calibration_samples": 745,
+            "policy_samples": 745,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 51.9,
+            "baseline": 53.6,
+            "selected_samples": 131,
+            "selected_accuracy": 59.5,
+            "brier_score": 0.2494,
+            "model_selection": {
+              "selected": "deep_boosting",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 1420,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2495,
+                "validation_brier": 0.2495,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456060,
+            "probability_calibration_until": 1788634920,
+            "policy_selection_until": 1788813780,
+            "final_test_start": 1788813840,
+            "evaluated_until": 1789052400,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 51.1,
+            "method": "historical_bin",
+            "samples": 421,
+            "wins": 215,
+            "interval": [
+              46.3,
+              55.8
+            ],
+            "note": "Калибровка по 421 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 7.88
+        },
+        {
+          "candidate": "shallow_trees",
+          "selected_inside_train": false,
+          "training_log_loss": 0.6969,
+          "validation": {
+            "samples": 994,
+            "training_samples": 9212,
+            "calibration_samples": 745,
+            "policy_samples": 745,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 53.6,
+            "baseline": 53.6,
+            "selected_samples": 1,
+            "selected_accuracy": 100.0,
+            "brier_score": 0.2523,
+            "model_selection": {
+              "selected": "shallow_trees",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 1420,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2468,
+                "validation_brier": 0.2468,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456060,
+            "probability_calibration_until": 1788634920,
+            "policy_selection_until": 1788813780,
+            "final_test_start": 1788813840,
+            "evaluated_until": 1789052400,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 47.6,
+            "method": "historical_bin",
+            "samples": 527,
+            "wins": 251,
+            "interval": [
+              43.4,
+              51.9
+            ],
+            "note": "Калибровка по 527 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 9.36
+        }
+      ],
+      "target": 80.0,
+      "seconds": 133.26,
+      "protocol": "fixed_candidates_train_only_selection_separate_calibration_policy_frozen_final",
+      "note": "Диагностика внешних котировок. Итоговый тест не выбирает модель. Повторно изученный архив — исследование, а не новый независимый результат.",
+      "symbol": "EURUSD",
+      "expiry": 3,
+      "entry_delay": 1,
+      "provider": "Twelve Data",
+      "history_candles": 20000,
+      "first_time": 1787852580,
+      "data_as_of": 1789052580,
+      "archive_sha256": "bfabd05a28705787f75f89fe366075785e35d2064d63e35c868626bbfaf2d245",
+      "data_status": "historical_not_forward_verified",
+      "method": "one_frozen_chronological_four_way_partition"
+    },
+    {
+      "selected_before_final": "boosting",
+      "selection_method": "purged_expanding_training_only",
+      "reports": [
+        {
+          "candidate": "legacy_linear",
+          "selected_inside_train": false,
+          "training_log_loss": 0.706,
+          "validation": {
+            "samples": 663,
+            "training_samples": 9289,
+            "calibration_samples": 496,
+            "policy_samples": 496,
+            "uncalibrated_test_samples": 5,
+            "accuracy": 51.0,
+            "baseline": 52.8,
+            "selected_samples": 137,
+            "selected_accuracy": 59.9,
+            "brier_score": 0.2484,
+            "model_selection": {
+              "selected": "legacy_linear",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 952,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2532,
+                "validation_brier": 0.2532,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 10,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456000,
+            "probability_calibration_until": 1788634620,
+            "policy_selection_until": 1788813480,
+            "final_test_start": 1788813780,
+            "evaluated_until": 1789052460,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 48.8,
+            "method": "historical_bin",
+            "samples": 344,
+            "wins": 168,
+            "interval": [
+              43.6,
+              54.1
+            ],
+            "note": "Калибровка по 344 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 0.64
+        },
+        {
+          "candidate": "expanded_linear",
+          "selected_inside_train": false,
+          "training_log_loss": 0.7332,
+          "validation": {
+            "samples": 663,
+            "training_samples": 9289,
+            "calibration_samples": 496,
+            "policy_samples": 496,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 52.5,
+            "baseline": 52.8,
+            "selected_samples": 192,
+            "selected_accuracy": 52.1,
+            "brier_score": 0.2536,
+            "model_selection": {
+              "selected": "expanded_linear",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 952,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2563,
+                "validation_brier": 0.2563,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456000,
+            "probability_calibration_until": 1788634620,
+            "policy_selection_until": 1788813480,
+            "final_test_start": 1788813780,
+            "evaluated_until": 1789052460,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 45.1,
+            "method": "historical_bin",
+            "samples": 286,
+            "wins": 129,
+            "interval": [
+              39.4,
+              50.9
+            ],
+            "note": "Калибровка по 286 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 1.44
+        },
+        {
+          "candidate": "regularized_linear",
+          "selected_inside_train": false,
+          "training_log_loss": 0.7233,
+          "validation": {
+            "samples": 663,
+            "training_samples": 9289,
+            "calibration_samples": 496,
+            "policy_samples": 496,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 53.2,
+            "baseline": 52.8,
+            "selected_samples": 180,
+            "selected_accuracy": 53.3,
+            "brier_score": 0.2526,
+            "model_selection": {
+              "selected": "regularized_linear",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 952,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2559,
+                "validation_brier": 0.2559,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456000,
+            "probability_calibration_until": 1788634620,
+            "policy_selection_until": 1788813480,
+            "final_test_start": 1788813780,
+            "evaluated_until": 1789052460,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 46.2,
+            "method": "historical_bin",
+            "samples": 284,
+            "wins": 131,
+            "interval": [
+              40.4,
+              51.9
+            ],
+            "note": "Калибровка по 284 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 1.11
+        },
+        {
+          "candidate": "boosting",
+          "selected_inside_train": true,
+          "training_log_loss": 0.688,
+          "validation": {
+            "samples": 663,
+            "training_samples": 9289,
+            "calibration_samples": 496,
+            "policy_samples": 496,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 50.8,
+            "baseline": 52.8,
+            "selected_samples": 38,
+            "selected_accuracy": 52.6,
+            "brier_score": 0.2555,
+            "model_selection": {
+              "selected": "boosting",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 952,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2489,
+                "validation_brier": 0.2489,
+                "validation_auc": null
+              },
+              "log_loss": {
+                "legacy_linear": 0.706,
+                "expanded_linear": 0.7332,
+                "regularized_linear": 0.7233,
+                "boosting": 0.688,
+                "extra_trees": 0.6861,
+                "ensemble": 0.6871,
+                "strong_linear": 0.6901,
+                "shallow_boosting": 0.6874,
+                "deep_boosting": 0.6988,
+                "shallow_trees": 0.6841
+              },
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456000,
+            "probability_calibration_until": 1788634620,
+            "policy_selection_until": 1788813480,
+            "final_test_start": 1788813780,
+            "evaluated_until": 1789052460,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 43.1,
+            "method": "historical_bin",
+            "samples": 330,
+            "wins": 142,
+            "interval": [
+              37.8,
+              48.4
+            ],
+            "note": "Калибровка по 330 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 0.0
+        },
+        {
+          "candidate": "extra_trees",
+          "selected_inside_train": false,
+          "training_log_loss": 0.6861,
+          "validation": {
+            "samples": 663,
+            "training_samples": 9289,
+            "calibration_samples": 496,
+            "policy_samples": 496,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 53.4,
+            "baseline": 52.8,
+            "selected_samples": 12,
+            "selected_accuracy": 50.0,
+            "brier_score": 0.2618,
+            "model_selection": {
+              "selected": "extra_trees",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 952,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2491,
+                "validation_brier": 0.2491,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456000,
+            "probability_calibration_until": 1788634620,
+            "policy_selection_until": 1788813480,
+            "final_test_start": 1788813780,
+            "evaluated_until": 1789052460,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 42.0,
+            "method": "historical_bin",
+            "samples": 369,
+            "wins": 155,
+            "interval": [
+              37.1,
+              47.1
+            ],
+            "note": "Калибровка по 369 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 13.48
+        },
+        {
+          "candidate": "ensemble",
+          "selected_inside_train": false,
+          "training_log_loss": 0.6871,
+          "validation": {
+            "samples": 663,
+            "training_samples": 9289,
+            "calibration_samples": 496,
+            "policy_samples": 496,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 53.7,
+            "baseline": 52.8,
+            "selected_samples": 54,
+            "selected_accuracy": 53.7,
+            "brier_score": 0.2652,
+            "model_selection": {
+              "selected": "ensemble",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 952,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2481,
+                "validation_brier": 0.2481,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456000,
+            "probability_calibration_until": 1788634620,
+            "policy_selection_until": 1788813480,
+            "final_test_start": 1788813780,
+            "evaluated_until": 1789052460,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 40.3,
+            "method": "historical_bin",
+            "samples": 333,
+            "wins": 134,
+            "interval": [
+              35.1,
+              45.6
+            ],
+            "note": "Калибровка по 333 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 17.69
+        },
+        {
+          "candidate": "strong_linear",
+          "selected_inside_train": false,
+          "training_log_loss": 0.6901,
+          "validation": {
+            "samples": 663,
+            "training_samples": 9289,
+            "calibration_samples": 496,
+            "policy_samples": 496,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 50.4,
+            "baseline": 52.8,
+            "selected_samples": 117,
+            "selected_accuracy": 54.7,
+            "brier_score": 0.2515,
+            "model_selection": {
+              "selected": "strong_linear",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 952,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.251,
+                "validation_brier": 0.251,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456000,
+            "probability_calibration_until": 1788634620,
+            "policy_selection_until": 1788813480,
+            "final_test_start": 1788813780,
+            "evaluated_until": 1789052460,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 45.2,
+            "method": "historical_bin",
+            "samples": 308,
+            "wins": 139,
+            "interval": [
+              39.7,
+              50.7
+            ],
+            "note": "Калибровка по 308 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 1.13
+        },
+        {
+          "candidate": "shallow_boosting",
+          "selected_inside_train": false,
+          "training_log_loss": 0.6874,
+          "validation": {
+            "samples": 663,
+            "training_samples": 9289,
+            "calibration_samples": 496,
+            "policy_samples": 496,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 52.2,
+            "baseline": 52.8,
+            "selected_samples": 9,
+            "selected_accuracy": 44.4,
+            "brier_score": 0.2531,
+            "model_selection": {
+              "selected": "shallow_boosting",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 952,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2505,
+                "validation_brier": 0.2505,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456000,
+            "probability_calibration_until": 1788634620,
+            "policy_selection_until": 1788813480,
+            "final_test_start": 1788813780,
+            "evaluated_until": 1789052460,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 46.2,
+            "method": "historical_bin",
+            "samples": 364,
+            "wins": 168,
+            "interval": [
+              41.1,
+              51.3
+            ],
+            "note": "Калибровка по 364 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 3.72
+        },
+        {
+          "candidate": "deep_boosting",
+          "selected_inside_train": false,
+          "training_log_loss": 0.6988,
+          "validation": {
+            "samples": 663,
+            "training_samples": 9289,
+            "calibration_samples": 496,
+            "policy_samples": 496,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 52.3,
+            "baseline": 52.8,
+            "selected_samples": 119,
+            "selected_accuracy": 55.5,
+            "brier_score": 0.2537,
+            "model_selection": {
+              "selected": "deep_boosting",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 952,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2521,
+                "validation_brier": 0.2521,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456000,
+            "probability_calibration_until": 1788634620,
+            "policy_selection_until": 1788813480,
+            "final_test_start": 1788813780,
+            "evaluated_until": 1789052460,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 45.6,
+            "method": "historical_bin",
+            "samples": 281,
+            "wins": 128,
+            "interval": [
+              39.8,
+              51.4
+            ],
+            "note": "Калибровка по 281 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 8.77
+        },
+        {
+          "candidate": "shallow_trees",
+          "selected_inside_train": false,
+          "training_log_loss": 0.6841,
+          "validation": {
+            "samples": 663,
+            "training_samples": 9289,
+            "calibration_samples": 496,
+            "policy_samples": 496,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 54.3,
+            "baseline": 52.8,
+            "selected_samples": 10,
+            "selected_accuracy": 40.0,
+            "brier_score": 0.2602,
+            "model_selection": {
+              "selected": "shallow_trees",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 952,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2498,
+                "validation_brier": 0.2498,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788456000,
+            "probability_calibration_until": 1788634620,
+            "policy_selection_until": 1788813480,
+            "final_test_start": 1788813780,
+            "evaluated_until": 1789052460,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 43.7,
+            "method": "historical_bin",
+            "samples": 380,
+            "wins": 166,
+            "interval": [
+              38.8,
+              48.7
+            ],
+            "note": "Калибровка по 380 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 14.24
+        }
+      ],
+      "target": 80.0,
+      "seconds": 139.85,
+      "protocol": "fixed_candidates_train_only_selection_separate_calibration_policy_frozen_final",
+      "note": "Диагностика внешних котировок. Итоговый тест не выбирает модель. Повторно изученный архив — исследование, а не новый независимый результат.",
+      "symbol": "EURUSD",
+      "expiry": 5,
+      "entry_delay": 1,
+      "provider": "Twelve Data",
+      "history_candles": 20000,
+      "first_time": 1787852580,
+      "data_as_of": 1789052580,
+      "archive_sha256": "bfabd05a28705787f75f89fe366075785e35d2064d63e35c868626bbfaf2d245",
+      "data_status": "historical_not_forward_verified",
+      "method": "one_frozen_chronological_four_way_partition"
+    },
+    {
+      "selected_before_final": "legacy_linear",
+      "selection_method": "purged_expanding_training_only",
+      "reports": [
+        {
+          "candidate": "legacy_linear",
+          "selected_inside_train": true,
+          "training_log_loss": 0.7101,
+          "validation": {
+            "samples": 249,
+            "training_samples": 9466,
+            "calibration_samples": 186,
+            "policy_samples": 186,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 55.4,
+            "baseline": 51.0,
+            "selected_samples": 26,
+            "selected_accuracy": 38.5,
+            "brier_score": 0.2515,
+            "model_selection": {
+              "selected": "legacy_linear",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 364,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2552,
+                "validation_brier": 0.2552,
+                "validation_auc": null
+              },
+              "log_loss": {
+                "legacy_linear": 0.7101,
+                "expanded_linear": 0.7706,
+                "regularized_linear": 0.7585,
+                "boosting": 0.7235,
+                "extra_trees": 0.7126,
+                "ensemble": 0.714,
+                "strong_linear": 0.7125,
+                "shallow_boosting": 0.7091,
+                "deep_boosting": 0.7608,
+                "shallow_trees": 0.7053
+              },
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 10,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788455700,
+            "probability_calibration_until": 1788634320,
+            "policy_selection_until": 1788813060,
+            "final_test_start": 1788813300,
+            "evaluated_until": 1789052340,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 50.3,
+            "method": "historical_bin",
+            "samples": 145,
+            "wins": 73,
+            "interval": [
+              42.3,
+              58.4
+            ],
+            "note": "Калибровка по 145 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 0.0
+        },
+        {
+          "candidate": "expanded_linear",
+          "selected_inside_train": false,
+          "training_log_loss": 0.7706,
+          "validation": {
+            "samples": 249,
+            "training_samples": 9466,
+            "calibration_samples": 186,
+            "policy_samples": 186,
+            "uncalibrated_test_samples": 1,
+            "accuracy": 50.6,
+            "baseline": 51.0,
+            "selected_samples": 82,
+            "selected_accuracy": 48.8,
+            "brier_score": 0.2606,
+            "model_selection": {
+              "selected": "expanded_linear",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 364,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2737,
+                "validation_brier": 0.2737,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788455700,
+            "probability_calibration_until": 1788634320,
+            "policy_selection_until": 1788813060,
+            "final_test_start": 1788813300,
+            "evaluated_until": 1789052340,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 38.7,
+            "method": "historical_bin",
+            "samples": 91,
+            "wins": 35,
+            "interval": [
+              29.1,
+              48.7
+            ],
+            "note": "Калибровка по 91 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 0.86
+        },
+        {
+          "candidate": "regularized_linear",
+          "selected_inside_train": false,
+          "training_log_loss": 0.7585,
+          "validation": {
+            "samples": 249,
+            "training_samples": 9466,
+            "calibration_samples": 186,
+            "policy_samples": 186,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 47.8,
+            "baseline": 51.0,
+            "selected_samples": 73,
+            "selected_accuracy": 49.3,
+            "brier_score": 0.2528,
+            "model_selection": {
+              "selected": "regularized_linear",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 364,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2711,
+                "validation_brier": 0.2711,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788455700,
+            "probability_calibration_until": 1788634320,
+            "policy_selection_until": 1788813060,
+            "final_test_start": 1788813300,
+            "evaluated_until": 1789052340,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 40.2,
+            "method": "historical_bin",
+            "samples": 95,
+            "wins": 38,
+            "interval": [
+              30.7,
+              50.1
+            ],
+            "note": "Калибровка по 95 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 0.65
+        },
+        {
+          "candidate": "boosting",
+          "selected_inside_train": false,
+          "training_log_loss": 0.7235,
+          "validation": {
+            "samples": 249,
+            "training_samples": 9466,
+            "calibration_samples": 186,
+            "policy_samples": 186,
+            "uncalibrated_test_samples": 90,
+            "accuracy": 50.6,
+            "baseline": 51.0,
+            "selected_samples": 42,
+            "selected_accuracy": 61.9,
+            "brier_score": 0.2507,
+            "model_selection": {
+              "selected": "boosting",
+              "folds": 3,
+              "success_model": {
+                "enabled": true,
+                "samples": 364,
+                "method": "out_of_fold_training_only",
+                "selected": "linear",
+                "baseline_brier": 0.2622,
+                "validation_brier": 0.254,
+                "validation_auc": 0.5676
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788455700,
+            "probability_calibration_until": 1788634320,
+            "policy_selection_until": 1788813060,
+            "final_test_start": 1788813300,
+            "evaluated_until": 1789052340,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 52.3,
+            "method": "historical_bin",
+            "samples": 63,
+            "wins": 33,
+            "interval": [
+              40.3,
+              64.2
+            ],
+            "note": "Калибровка по 63 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 2.79
+        },
+        {
+          "candidate": "extra_trees",
+          "selected_inside_train": false,
+          "training_log_loss": 0.7126,
+          "validation": {
+            "samples": 249,
+            "training_samples": 9466,
+            "calibration_samples": 186,
+            "policy_samples": 186,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 52.6,
+            "baseline": 51.0,
+            "selected_samples": 16,
+            "selected_accuracy": 56.2,
+            "brier_score": 0.251,
+            "model_selection": {
+              "selected": "extra_trees",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 364,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2541,
+                "validation_brier": 0.2541,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788455700,
+            "probability_calibration_until": 1788634320,
+            "policy_selection_until": 1788813060,
+            "final_test_start": 1788813300,
+            "evaluated_until": 1789052340,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 48.8,
+            "method": "historical_bin",
+            "samples": 123,
+            "wins": 60,
+            "interval": [
+              40.1,
+              57.5
+            ],
+            "note": "Калибровка по 123 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 12.17
+        },
+        {
+          "candidate": "ensemble",
+          "selected_inside_train": false,
+          "training_log_loss": 0.714,
+          "validation": {
+            "samples": 249,
+            "training_samples": 9466,
+            "calibration_samples": 186,
+            "policy_samples": 186,
+            "uncalibrated_test_samples": 24,
+            "accuracy": 51.0,
+            "baseline": 51.0,
+            "selected_samples": 24,
+            "selected_accuracy": 54.2,
+            "brier_score": 0.2553,
+            "model_selection": {
+              "selected": "ensemble",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 364,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2598,
+                "validation_brier": 0.2598,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788455700,
+            "probability_calibration_until": 1788634320,
+            "policy_selection_until": 1788813060,
+            "final_test_start": 1788813300,
+            "evaluated_until": 1789052340,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 43.4,
+            "method": "historical_bin",
+            "samples": 120,
+            "wins": 52,
+            "interval": [
+              34.8,
+              52.3
+            ],
+            "note": "Калибровка по 120 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 17.21
+        },
+        {
+          "candidate": "strong_linear",
+          "selected_inside_train": false,
+          "training_log_loss": 0.7125,
+          "validation": {
+            "samples": 249,
+            "training_samples": 9466,
+            "calibration_samples": 186,
+            "policy_samples": 186,
+            "uncalibrated_test_samples": 2,
+            "accuracy": 47.4,
+            "baseline": 51.0,
+            "selected_samples": 32,
+            "selected_accuracy": 46.9,
+            "brier_score": 0.2494,
+            "model_selection": {
+              "selected": "strong_linear",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 364,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2608,
+                "validation_brier": 0.2608,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788455700,
+            "probability_calibration_until": 1788634320,
+            "policy_selection_until": 1788813060,
+            "final_test_start": 1788813300,
+            "evaluated_until": 1789052340,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 44.9,
+            "method": "historical_bin",
+            "samples": 47,
+            "wins": 21,
+            "interval": [
+              31.4,
+              58.8
+            ],
+            "note": "Калибровка по 47 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 0.49
+        },
+        {
+          "candidate": "shallow_boosting",
+          "selected_inside_train": false,
+          "training_log_loss": 0.7091,
+          "validation": {
+            "samples": 249,
+            "training_samples": 9466,
+            "calibration_samples": 186,
+            "policy_samples": 186,
+            "uncalibrated_test_samples": 6,
+            "accuracy": 49.0,
+            "baseline": 51.0,
+            "selected_samples": 6,
+            "selected_accuracy": 50.0,
+            "brier_score": 0.251,
+            "model_selection": {
+              "selected": "shallow_boosting",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 364,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2532,
+                "validation_brier": 0.2532,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788455700,
+            "probability_calibration_until": 1788634320,
+            "policy_selection_until": 1788813060,
+            "final_test_start": 1788813300,
+            "evaluated_until": 1789052340,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 45.7,
+            "method": "historical_bin",
+            "samples": 127,
+            "wins": 58,
+            "interval": [
+              37.3,
+              54.3
+            ],
+            "note": "Калибровка по 127 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 2.56
+        },
+        {
+          "candidate": "deep_boosting",
+          "selected_inside_train": false,
+          "training_log_loss": 0.7608,
+          "validation": {
+            "samples": 249,
+            "training_samples": 9466,
+            "calibration_samples": 186,
+            "policy_samples": 186,
+            "uncalibrated_test_samples": 8,
+            "accuracy": 50.6,
+            "baseline": 51.0,
+            "selected_samples": 90,
+            "selected_accuracy": 46.7,
+            "brier_score": 0.2492,
+            "model_selection": {
+              "selected": "deep_boosting",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 364,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2785,
+                "validation_brier": 0.2785,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788455700,
+            "probability_calibration_until": 1788634320,
+            "policy_selection_until": 1788813060,
+            "final_test_start": 1788813300,
+            "evaluated_until": 1789052340,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 56.1,
+            "method": "historical_bin",
+            "samples": 80,
+            "wins": 45,
+            "interval": [
+              45.3,
+              66.6
+            ],
+            "note": "Калибровка по 80 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 6.92
+        },
+        {
+          "candidate": "shallow_trees",
+          "selected_inside_train": false,
+          "training_log_loss": 0.7053,
+          "validation": {
+            "samples": 249,
+            "training_samples": 9466,
+            "calibration_samples": 186,
+            "policy_samples": 186,
+            "uncalibrated_test_samples": 0,
+            "accuracy": 49.4,
+            "baseline": 51.0,
+            "selected_samples": 1,
+            "selected_accuracy": 0.0,
+            "brier_score": 0.2499,
+            "model_selection": {
+              "selected": "shallow_trees",
+              "folds": 3,
+              "success_model": {
+                "enabled": false,
+                "samples": 364,
+                "method": "out_of_fold_training_only",
+                "selected": null,
+                "baseline_brier": 0.2535,
+                "validation_brier": 0.2535,
+                "validation_auc": null
+              },
+              "log_loss": {},
+              "method": "purged_expanding_training_only"
+            },
+            "feature_count": 56,
+            "selective": {
+              "target": 80.0,
+              "threshold": null,
+              "regime": "all",
+              "calibration_samples": 0,
+              "calibration_wins": 0,
+              "calibration_accuracy": null,
+              "policies_considered": 72,
+              "samples": 0,
+              "wins": 0,
+              "accuracy": null,
+              "interval": null,
+              "coverage": 0.0,
+              "recent_accuracy": null,
+              "passed": false,
+              "required_lower_bound": 80.0,
+              "method": "policy_selection_frozen_final_test"
+            },
+            "training_cutoff": 1788455700,
+            "probability_calibration_until": 1788634320,
+            "policy_selection_until": 1788813060,
+            "final_test_start": 1788813300,
+            "evaluated_until": 1789052340,
+            "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"
+          },
+          "probability": {
+            "value": 47.7,
+            "method": "historical_bin",
+            "samples": 128,
+            "wins": 61,
+            "interval": [
+              39.2,
+              56.3
+            ],
+            "note": "Калибровка по 128 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+          },
+          "signal_eligible": false,
+          "seconds": 12.23
+        }
+      ],
+      "target": 80.0,
+      "seconds": 131.31,
+      "protocol": "fixed_candidates_train_only_selection_separate_calibration_policy_frozen_final",
+      "note": "Диагностика внешних котировок. Итоговый тест не выбирает модель. Повторно изученный архив — исследование, а не новый независимый результат.",
+      "symbol": "EURUSD",
+      "expiry": 15,
+      "entry_delay": 1,
+      "provider": "Twelve Data",
+      "history_candles": 20000,
+      "first_time": 1787852580,
+      "data_as_of": 1789052580,
+      "archive_sha256": "bfabd05a28705787f75f89fe366075785e35d2064d63e35c868626bbfaf2d245",
+      "data_status": "historical_not_forward_verified",
+      "method": "one_frozen_chronological_four_way_partition"
+    }
+  ]
+}

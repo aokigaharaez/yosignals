@@ -11,6 +11,11 @@ from .config import Settings
 from .models import Candle
 
 LOOKBACK = 120
+FEATURE_COUNT = 56
+
+MODEL_CANDIDATES = ("legacy_linear", "expanded_linear", "regularized_linear", "boosting",
+                    "extra_trees", "ensemble", "strong_linear", "shallow_boosting",
+                    "deep_boosting", "shallow_trees")
 
 
 class ProbabilityEnsemble:
@@ -41,7 +46,7 @@ def features(candles: list[Candle]) -> tuple[np.ndarray, dict]:
     for i in range(1, len(close)):
         ema9[i] = .2 * close[i] + .8 * ema9[i - 1]
         ema21[i] = (2 / 22) * close[i] + (20 / 22) * ema21[i - 1]
-    result = np.zeros((len(close), 40))
+    result = np.zeros((len(close), FEATURE_COUNT))
     indicators = {}
     for i in range(LOOKBACK, len(close)):
         delta = np.diff(close[i - 14:i + 1])
@@ -70,7 +75,38 @@ def features(candles: list[Candle]) -> tuple[np.ndarray, dict]:
                       (min(opens[i], close[i])-low[i])/span,
                       (close[i]-low[i])/span,
                       np.sin(2*np.pi*minute/1440), np.cos(2*np.pi*minute/1440)])
-        result[i] = original + extra
+        additional = []
+        for window in (5, 30):
+            moves = np.diff(close[i-window:i+1])
+            up, down = np.maximum(moves,0).mean(), np.maximum(-moves,0).mean()
+            additional.append(0. if up+down == 0 else (up-down)/(up+down))
+        for window in (10, 30):
+            moves = np.diff(close[i-window:i+1])
+            left, right = moves[:-1]-moves[:-1].mean(), moves[1:]-moves[1:].mean()
+            denominator = np.sqrt(np.sum(left*left)*np.sum(right*right))
+            additional.append(float(np.sum(left*right)/denominator) if denominator else 0.)
+        for window in (15, 60):
+            centers = np.arange(window,dtype=float)-(window-1)/2
+            recent = close[i-window+1:i+1]
+            slope = float(np.dot(centers,recent-recent.mean())/np.dot(centers,centers))
+            additional.append(slope*window/scale)
+        returns60 = np.diff(close[i-60:i+1])
+        returns30 = returns60[-30:]
+        volatility60 = max(float(np.std(returns60)),scale*1e-6)
+        additional.append(min(10.,float(np.std(returns60[-5:]))/volatility60))
+        ranges30 = high[i-29:i+1]-low[i-29:i+1]
+        additional.append(min(10.,float(ranges30[-5:].mean())/max(float(ranges30.mean()),scale*1e-6)))
+        centered = returns30-returns30.mean()
+        sigma = float(np.std(returns30))
+        additional.append(float(np.clip(np.mean(centered**3)/sigma**3,-5,5)) if sigma else 0.)
+        additional.append(float(np.sign(returns60[-10:]).mean()))
+        weekday = ((candles[i].time//86400)+3)%7
+        additional.extend((np.sin(2*np.pi*weekday/7),np.cos(2*np.pi*weekday/7),
+                           (close[i]-high[i-30:i].max())/scale,
+                           (close[i]-low[i-30:i].min())/scale,
+                           (close[i-1]-opens[i-1])/scale,
+                           (opens[i]-close[i-1])/scale))
+        result[i] = original + extra + additional
         indicators = {"rsi": round(rsi, 1), "ema9": float(ema9[i]), "ema21": float(ema21[i]),
                       "atr": atr, "trend": "up" if ema9[i] > ema21[i] else "down"}
     return result, indicators
@@ -109,6 +145,30 @@ def chronological_split(indices, horizon, entry_delay):
     return train, spaced(a, b, indices[b]), spaced(b, len(indices))
 
 
+def chronological_partitions(indices, horizon, entry_delay):
+    """50% train, 15% probability calibration, 15% policy selection, 20% final test.
+
+    Purge label overlap at every boundary. Probability-calibration outcomes never
+    select the policy; final-test outcomes never fit a model or a threshold.
+    """
+    a, b, c = [int(len(indices)*fraction) for fraction in (.50, .65, .80)]
+    gap = horizon + entry_delay
+    train = np.flatnonzero(indices + gap < indices[a])
+
+    def spaced(start, end, before=None):
+        positions, previous = [], -10000
+        for position in range(start, end):
+            if before is not None and indices[position]+gap >= before:
+                continue
+            if indices[position]-previous >= gap:
+                positions.append(position)
+                previous = indices[position]
+        return np.array(positions, dtype=int)
+
+    return (train, spaced(a, b, indices[b]), spaced(b, c, indices[c]),
+            spaced(c, len(indices)))
+
+
 def probability_estimate(score, calibration_scores, calibration_wins, draw_rate=0.):
     """Fixed confidence bins on disjoint history, with Beta(1,1) smoothing.
 
@@ -120,9 +180,9 @@ def probability_estimate(score, calibration_scores, calibration_wins, draw_rate=
     matches = calibration_wins[bins == bin_id]
     n, wins = len(matches), int(matches.sum())
     if n < 30:
-        return {"value": round(score * (1 - draw_rate) * 100, 1), "method": "uncalibrated_model",
+        return {"value": None, "confidence_score": round(score*100, 1), "method": "uncalibrated_model",
                 "samples": n, "wins": wins, "interval": None,
-                "note": "Предварительная оценка модели: мало похожих примеров для калибровки."}
+                "note": "Шанс неизвестен: мало независимых похожих прогнозов. Уверенность модели не является вероятностью выигрыша."}
     p = wins / n
     z = 1.96
     center = (p + z*z/(2*n)) / (1 + z*z/n)
@@ -133,39 +193,40 @@ def probability_estimate(score, calibration_scores, calibration_wins, draw_rate=
             "note": f"Калибровка по {n} похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."}
 
 
-def fit_selected_model(x, indices, targets, train, gap):
+def build_model(name):
+    if name == "strong_linear":
+        return make_pipeline(StandardScaler(), LogisticRegression(C=.002, max_iter=600))
+    if name == "shallow_boosting":
+        return HistGradientBoostingClassifier(max_iter=100, max_leaf_nodes=3,
+            min_samples_leaf=60, learning_rate=.03, l2_regularization=20,
+            early_stopping=False, random_state=17)
+    if name == "deep_boosting":
+        return HistGradientBoostingClassifier(max_iter=100, max_leaf_nodes=15,
+            min_samples_leaf=60, learning_rate=.04, l2_regularization=15,
+            early_stopping=False, random_state=17)
+    if name == "shallow_trees":
+        return ExtraTreesClassifier(n_estimators=100, max_depth=4, min_samples_leaf=60,
+            max_features=.7, n_jobs=1, random_state=17)
+    if name == "ensemble":
+        return ProbabilityEnsemble()
+    if name == "extra_trees":
+        return ExtraTreesClassifier(n_estimators=80, max_depth=7, min_samples_leaf=30,
+            max_features=.7, n_jobs=1, random_state=17)
+    if name == "regularized_linear":
+        return make_pipeline(StandardScaler(), LogisticRegression(C=.05, max_iter=400))
+    if name == "boosting":
+        return HistGradientBoostingClassifier(max_iter=60, max_leaf_nodes=7,
+            min_samples_leaf=30, learning_rate=.05, l2_regularization=5,
+            early_stopping=False, random_state=17)
+    return make_pipeline(StandardScaler(), LogisticRegression(C=.2, max_iter=400))
+
+
+def fit_selected_model(x, indices, targets, train, gap, forced_candidate=None):
     """Select only within training history; calibration/test are never consulted.
 
     Three expanding windows purge outcomes overlapping the next window. Keep the
     old model as a candidate and require lower log loss to change it.
     """
-    def build(name):
-        if name == "strong_linear":
-            return make_pipeline(StandardScaler(), LogisticRegression(C=.002, max_iter=600))
-        if name == "shallow_boosting":
-            return HistGradientBoostingClassifier(max_iter=100, max_leaf_nodes=3,
-                min_samples_leaf=60, learning_rate=.03, l2_regularization=20,
-                early_stopping=False, random_state=17)
-        if name == "deep_boosting":
-            return HistGradientBoostingClassifier(max_iter=100, max_leaf_nodes=15,
-                min_samples_leaf=60, learning_rate=.04, l2_regularization=15,
-                early_stopping=False, random_state=17)
-        if name == "shallow_trees":
-            return ExtraTreesClassifier(n_estimators=100, max_depth=4, min_samples_leaf=60,
-                max_features=.7, n_jobs=1, random_state=17)
-        if name == "ensemble":
-            return ProbabilityEnsemble()
-        if name == "extra_trees":
-            return ExtraTreesClassifier(n_estimators=80, max_depth=7, min_samples_leaf=30,
-                max_features=.7, n_jobs=1, random_state=17)
-        if name == "regularized_linear":
-            return make_pipeline(StandardScaler(), LogisticRegression(C=.05, max_iter=400))
-        if name == "boosting":
-            return HistGradientBoostingClassifier(max_iter=60, max_leaf_nodes=7,
-                min_samples_leaf=30, learning_rate=.05, l2_regularization=5,
-                early_stopping=False, random_state=17)
-        return make_pipeline(StandardScaler(), LogisticRegression(C=.2, max_iter=400))
-
     candidates = (("legacy_linear", 10), ("expanded_linear", x.shape[1]),
                   ("regularized_linear", x.shape[1]), ("boosting", x.shape[1]),
                   ("extra_trees", x.shape[1]), ("ensemble", x.shape[1]),
@@ -183,25 +244,27 @@ def fit_selected_model(x, indices, targets, train, gap):
                 previous = indices[p]
         if len(fit) >= 60 and len(check) >= 10 and len(np.unique(targets[fit])) == 2:
             folds.append((fit, np.array(check)))
+    if forced_candidate is not None and forced_candidate not in MODEL_CANDIDATES:
+        raise ValueError('Unknown ML candidate')
     losses = {}
-    if len(folds) >= 2:
+    if forced_candidate is None and len(folds) >= 2:
         for name, width in candidates:
             actual, predictions = [], []
             for fit, check in folds:
-                candidate = build(name)
+                candidate = build_model(name)
                 candidate.fit(x[indices[fit], :width], targets[fit])
                 actual.extend(targets[check])
                 predictions.extend(candidate.predict_proba(x[indices[check], :width])[:, 1])
             losses[name] = float(log_loss(actual, predictions, labels=[0, 1]))
     # Small margin avoids replacing the simpler model on a tiny difference.
-    winner = "legacy_linear"
+    winner = forced_candidate or "legacy_linear"
     for name, _ in candidates[1:]:
         if name in losses and losses[name] < losses.get(winner, float("inf")) - .005:
             winner = name
     width = dict(candidates)[winner]
-    model = build(winner)
+    model = build_model(winner)
     model.fit(x[indices[train], :width], targets[train])
-    model.success_model, success_report = fit_success_model(build, winner, width, x, indices, targets, folds, gap)
+    model.success_model, success_report = fit_success_model(build_model, winner, width, x, indices, targets, folds, gap)
     return model, width, {"selected": winner, "folds": len(folds),
                           "success_model": success_report,
                           "log_loss": {k: round(v, 4) for k, v in losses.items()},
@@ -293,7 +356,7 @@ def selective_validation(cal_scores, cal_wins, test_scores, test_wins, settings,
             n, wins = int(mask.sum()), int(cal_wins[mask].sum())
             tried += 1
             if (n >= settings.model_min_calibration_samples and wins/n >= settings.model_target_win_rate
-                    and wilson_interval(wins, n)[0] >= 60 and n > best_count):
+                    and wilson_interval(wins, n)[0] >= settings.model_target_win_rate*100 and n > best_count):
                 threshold, regime, best_count, calibration_wins = candidate, name, n, wins
     mask = ((test_scores >= threshold) & regime_mask(regime, test_x)
             if threshold is not None else np.zeros(len(test_scores), dtype=bool))
@@ -302,7 +365,8 @@ def selective_validation(cal_scores, cal_wins, test_scores, test_wins, settings,
     recent = np.flatnonzero(mask)[n//2:]
     recent_accuracy = float(np.mean(test_wins[recent])) if len(recent) else None
     passed = bool(n >= settings.model_min_test_signals and wins/n >= settings.model_target_win_rate
-                  and interval[0] >= 60 and recent_accuracy >= settings.model_target_win_rate-.10)
+                  and interval[0] >= settings.model_target_win_rate*100
+                  and recent_accuracy >= settings.model_target_win_rate)
     return {"target": round(settings.model_target_win_rate*100, 1), "threshold": threshold,
             "regime": regime, "calibration_samples": best_count, "calibration_wins": calibration_wins,
             "calibration_accuracy": round(calibration_wins/best_count*100,1) if best_count else None,
@@ -310,7 +374,8 @@ def selective_validation(cal_scores, cal_wins, test_scores, test_wins, settings,
             "samples": n, "wins": wins, "accuracy": round(wins/n*100, 1) if n else None,
             "interval": interval, "coverage": round(n/max(1, len(test_scores))*100, 1),
             "recent_accuracy": round(recent_accuracy*100, 1) if recent_accuracy is not None else None,
-            "passed": passed, "method": "calibration_threshold_untouched_test"}
+            "passed": passed, "required_lower_bound": round(settings.model_target_win_rate*100, 1),
+            "method": "policy_selection_frozen_final_test"}
 
 
 class MLTrainer:
@@ -344,9 +409,9 @@ class MLTrainer:
         return finish_forecast({}, up, indicators, state, settings, current_x=x[-1:])
 
 
-def analyze(candles: list[Candle], horizon: int, settings: Settings, entry_delay: int = 1, training_state=None) -> dict:
+def analyze(candles: list[Candle], horizon: int, settings: Settings, entry_delay: int = 1, training_state=None, candidate_name=None, _prepared_dataset=None) -> dict:
     base = {"direction": "WAIT", "score": None, "probability": None,
-            "quality": "unavailable", "model": "Adaptive ML · v5",
+            "quality": "unavailable", "model": "Adaptive ML · v6",
             "validation": None, "indicators": {}, "reasons": [], "model_ready": False}
     if len(candles) < 300:
         base["reasons"] = ["Для обучения нужно минимум 300 закрытых минутных свечей."]
@@ -360,7 +425,8 @@ def analyze(candles: list[Candle], horizon: int, settings: Settings, entry_delay
         x, indicators = features(candles[-181:])
         up = float(training_state["model"].predict_proba(x[-1:, :training_state["width"]])[:, 1][0])
         return finish_forecast(base, up, indicators, training_state, settings, current_x=x[-1:])
-    x, indices, targets, indicators = dataset(candles, horizon, entry_delay)
+    x, indices, targets, indicators = (_prepared_dataset if _prepared_dataset is not None
+                                       else dataset(candles, horizon, entry_delay))
     base["indicators"] = indicators
     if not all(candles[i].time - candles[i-1].time == 60 for i in range(len(candles)-30, len(candles))):
         base["reasons"] = ["В последних свечах есть разрывы: нужен непрерывный участок рынка."]
@@ -368,15 +434,15 @@ def analyze(candles: list[Candle], horizon: int, settings: Settings, entry_delay
     if len(indices) < 220:
         base["reasons"] = ["Недостаточно непрерывной истории для этой экспирации."]
         return base
-    train, calibration, test = chronological_split(indices, horizon, entry_delay)
-    if not len(calibration) or not len(test):
+    train, calibration, policy, test = chronological_partitions(indices, horizon, entry_delay)
+    if not len(calibration) or not len(policy) or not len(test):
         base["reasons"] = ["Для выбранного времени входа и экспирации недостаточно истории для независимой проверки."]
         return base
     train = train[targets[train] >= 0]
     if len(train) < 120 or len(np.unique(targets[train])) < 2:
         base["reasons"] = ["Недостаточно обучающих примеров с движением в обе стороны."]
         return base
-    model, width, selection = fit_selected_model(x, indices, targets, train, horizon+entry_delay)
+    model, width, selection = fit_selected_model(x, indices, targets, train, horizon+entry_delay, candidate_name)
 
     def predict(positions):
         up = model.predict_proba(x[indices[positions], :width])[:, 1]
@@ -385,6 +451,8 @@ def analyze(candles: list[Candle], horizon: int, settings: Settings, entry_delay
     cal_scores, cal_directions = predict(calibration)
     cal_wins = cal_directions == targets[calibration]
     draw_rate = float(np.mean(targets[calibration] == -1))
+    policy_scores, policy_directions = predict(policy)
+    policy_wins = policy_directions == targets[policy]
     test_scores, test_directions = predict(test)
     wins = test_directions == targets[test]
     accuracy = float(np.mean(wins))
@@ -395,18 +463,25 @@ def analyze(candles: list[Candle], horizon: int, settings: Settings, entry_delay
     selected_accuracy = float(np.mean(wins[selected])) if selected_count else None
     up = float(model.predict_proba(x[-1:, :width])[:, 1][0])
     score = max(up, 1-up)
-    test_estimates = np.array([probability_estimate(s, cal_scores, cal_wins, draw_rate)["value"] / 100 for s in test_scores])
+    fallback = float((cal_wins.sum()+1)/(len(cal_wins)+2))
+    estimates = [probability_estimate(s, cal_scores, cal_wins, draw_rate) for s in test_scores]
+    test_estimates = np.array([item["value"]/100 if item["value"] is not None else fallback for item in estimates])
     validation = {"samples": len(test), "training_samples": len(train), "calibration_samples": len(calibration),
+                  "policy_samples": len(policy),
+                  "uncalibrated_test_samples": sum(item["value"] is None for item in estimates),
                   "accuracy": round(accuracy*100, 1), "baseline": round(baseline*100, 1),
                   "selected_samples": selected_count,
                   "selected_accuracy": round(selected_accuracy*100, 1) if selected_accuracy is not None else None,
                   "brier_score": round(float(np.mean((test_estimates-wins)**2)), 4),
                   "model_selection": selection, "feature_count": width,
-                  "selective": selective_validation(cal_scores, cal_wins, test_scores, wins, settings,
-                                                     x[indices[calibration]], x[indices[test]]),
+                  "selective": selective_validation(policy_scores, policy_wins, test_scores, wins, settings,
+                                                     x[indices[policy]], x[indices[test]]),
                   "training_cutoff": candles[indices[train[-1]]+horizon+entry_delay].time+60,
+                  "probability_calibration_until": candles[indices[calibration[-1]]+horizon+entry_delay].time+60,
+                  "policy_selection_until": candles[indices[policy[-1]]+horizon+entry_delay].time+60,
+                  "final_test_start": candles[indices[test[0]]].time+60,
                   "evaluated_until": candles[indices[test[-1]]+horizon+entry_delay].time+60,
-                  "method": "train_calibration_test_purged_nonoverlapping"}
+                  "method": "train_probability_calibration_policy_final_test_purged_nonoverlapping"}
     fitted = {"model": model, "width": width, "selection": selection,
               "cal_scores": cal_scores, "cal_wins": cal_wins, "cal_x": x[indices[calibration]], "draw_rate": draw_rate,
               "validation": validation, "fitted_monotonic": time.monotonic(),
@@ -444,13 +519,14 @@ def finish_forecast(base, up, indicators, fitted, settings, current_x=None):
         warnings.append(f"Уверенность ниже фильтра качества {settings.model_min_score:.0%}; направление показано как предварительный прогноз.")
     if probability["method"] != "historical_bin":
         warnings.append("Процент пока не откалиброван на достаточной выборке.")
-    if probability["value"] < settings.model_min_validation * 100:
+    if probability["value"] is not None and probability["value"] < settings.model_min_validation * 100:
         warnings.append("Оценка шанса низкая; это не рекомендация входить в сделку.")
     eligible = bool(selective["passed"] and in_policy
                     and probability["method"] == "historical_bin"
                     and probability["samples"] >= settings.model_min_calibration_samples
+                    and probability["value"] is not None
                     and probability["value"] >= settings.model_target_win_rate*100
-                    and probability["interval"][0] >= 60)
+                    and probability["interval"][0] >= settings.model_target_win_rate*100)
     base.update(direction="CALL" if up >= .5 else "PUT", score=round(score*100, 1),
                 direction_confidence=round(direction_confidence*100,1),
                 signal_eligible=eligible, training={"history_candles": fitted["history_count"],
@@ -458,9 +534,41 @@ def finish_forecast(base, up, indicators, fitted, settings, current_x=None):
                     "next_retrain_seconds": max(0, int(settings.model_retrain_seconds-(time.monotonic()-fitted["fitted_monotonic"])))},
                 probability=probability, quality="weak" if warnings else "qualified",
                 indicators=indicators,
-                validation=validation, model_ready=True, model=f"Adaptive ML · v5 · {fitted['selection']['selected']}",
+                validation=validation, model_ready=True, model=f"Adaptive ML · v6 · {fitted['selection']['selected']}",
                 reasons=[f"EMA 9 {'выше' if indicators['trend'] == 'up' else 'ниже'} EMA 21; RSI {indicators['rsi']}.",
                          *(warnings or ["Фильтры качества на контрольной истории пройдены."])])
     return base
 
 
+
+
+def benchmark_candidates(candles, horizon, settings, entry_delay=1):
+    """Report all ten fixed candidates; the deployment choice is frozen inside train.
+
+    This is exploratory when the supplied archive has already been inspected.
+    Comparing these final outcomes must not be used to choose a deployed winner.
+    """
+    started = time.monotonic()
+    prepared = dataset(candles,horizon,entry_delay) if len(candles) >= 300 else None
+    selected_run = analyze(candles,horizon,settings,entry_delay,_prepared_dataset=prepared)
+    selection = (selected_run.get("validation") or {}).get("model_selection")
+    if selection is None:
+        return {"reports": [], "selected_before_final": None, "reason": selected_run["reasons"]}
+    selected = selection["selected"]
+    reports = []
+    for name in MODEL_CANDIDATES:
+        before = time.monotonic()
+        run = selected_run if name == selected else analyze(
+            candles,horizon,settings,entry_delay,candidate_name=name,_prepared_dataset=prepared)
+        reports.append({"candidate": name, "selected_inside_train": name == selected,
+                        "training_log_loss": selection["log_loss"].get(name),
+                        "validation": run.get("validation"),
+                        "probability": run.get("probability"),
+                        "signal_eligible": run.get("signal_eligible", False),
+                        "seconds": round(time.monotonic()-before, 2)})
+    return {"selected_before_final": selected,
+            "selection_method": selection["method"], "reports": reports,
+            "target": round(settings.model_target_win_rate*100, 1),
+            "seconds": round(time.monotonic()-started, 2),
+            "protocol": "fixed_candidates_train_only_selection_separate_calibration_policy_frozen_final",
+            "note": "Final outcomes are diagnostics, never a model-selection criterion. Previously inspected data is exploratory."}

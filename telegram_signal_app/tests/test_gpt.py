@@ -78,22 +78,24 @@ async def test_gpt_timeout_and_incomplete_response():
 
 
 @pytest.mark.asyncio
-async def test_gpt_blocks_concurrent_requests():
+async def test_gpt_allows_independent_owners_without_global_busy():
     started, release = asyncio.Event(), asyncio.Event()
+    calls = []
     async def respond(request):
-        started.set()
+        calls.append(request)
+        if len(calls) == 2:
+            started.set()
         await release.wait()
         return httpx.Response(500)
     async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
         review = GPTReview(Settings(openai_api_key="secret"), client)
         first = asyncio.create_task(review.review(SNAPSHOT, "gpt-6-luna", 42))
-        await started.wait()
-        with pytest.raises(GPTError) as error:
-            await review.review(SNAPSHOT, "gpt-6-luna", 43)
-        assert error.value.code == "gpt_busy"
+        second = asyncio.create_task(review.review(SNAPSHOT, "gpt-6-luna", 43))
+        await asyncio.wait_for(started.wait(), timeout=1)
         release.set()
-        with pytest.raises(GPTError):
-            await first
+        results = await asyncio.gather(first, second, return_exceptions=True)
+        assert all(isinstance(result, GPTError) for result in results)
+        assert len(calls) == 2 and not review.inflight
 
 @pytest.mark.asyncio
 async def test_gpt_independent_prediction_and_engine_journal(tmp_path):
@@ -201,7 +203,7 @@ async def test_fast_luna_forecast_reuses_completed_result_without_another_charge
 
 
 @pytest.mark.asyncio
-async def test_gpt_deadline_cancels_slow_provider_and_releases_lock(monkeypatch):
+async def test_gpt_deadline_cancels_slow_provider_and_releases_slot(monkeypatch):
     monkeypatch.setattr('app.gpt.SIGNAL_TIMEOUT', .01)
     async def respond(request):
         await asyncio.sleep(.2)
@@ -211,7 +213,7 @@ async def test_gpt_deadline_cancels_slow_provider_and_releases_lock(monkeypatch)
         with pytest.raises(GPTError) as error:
             await review.review(SNAPSHOT, 'gpt-6-luna', 42, signal=True)
         assert error.value.code == 'gpt_timeout'
-        assert not review.lock.locked()
+        assert not review.inflight and review.slots._value == 3
 
 
 @pytest.mark.asyncio

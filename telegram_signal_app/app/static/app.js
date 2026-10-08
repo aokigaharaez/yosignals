@@ -147,7 +147,7 @@ async function pollLive(){
 }
 function renderSnapshot() {
   let d=state.snapshot;if(!d)return;
-  if(state.engine==="ml"&&$("strict-ml").checked&&!d.signal_eligible){d={...d,raw_direction:d.raw_direction||d.direction,direction:"WAIT",status:"filtered"};}
+  if($("strict-ml").checked&&!d.signal_eligible&&!d.forecast_pending&&!d.training_pending){d={...d,raw_direction:d.raw_direction||d.direction,direction:"WAIT",status:"filtered"};}
   $("chart-empty").hidden=true;
   text("signal-updated",`${d.engine==="gpt"?d.model:({legacy_linear:"ML · линейная",expanded_linear:"ML · расширенная",boosting:"ML · бустинг",extra_trees:"ML · деревья",regularized_linear:"ML · регуляризация",ensemble:"ML · ансамбль",strong_linear:"ML · сильная регуляризация",shallow_boosting:"ML · простой бустинг",deep_boosting:"ML · расширенный бустинг",shallow_trees:"ML · простые деревья"}[d.validation?.model_selection?.selected]||"ML Model")} · анализ ${clockTime(d.forecast_at||d.server_time)} · вход ${clockTime(d.entry_at)} · экспирация ${d.expiry} мин`);
   text("asset-price",price(d.price));text("asset-change",`${d.change_percent>=0?"+":""}${d.change_percent.toFixed(3)}% за 60 мин`);
@@ -159,7 +159,7 @@ function renderSnapshot() {
   text("validation-detail",d.validation?`${d.label} · ${d.validation.samples} примеров · база ${d.validation.baseline}%`:"Недостаточно истории");
   text("ml-training-status",d.training?`Обучение ${d.label}: ${d.training.history_candles} свечей · ${d.validation?.feature_count||0} признаков · обновление модели раз в ${Math.round((state.session?.model_retrain_seconds||600)/60)} мин`:"Ожидаем обучение модели");
   const selective=d.validation?.selective;
-  text("ml-selective-status",selective?`Калибровка: ${selective.calibration_accuracy==null?"нет отбора":`${selective.calibration_accuracy}%`} → строгая проверка: ${selective.accuracy==null?"нет подходящих сигналов":`${selective.accuracy}% успеха`} · ${selective.samples} примеров · отобрано ${selective.coverage}% · ${selective.passed?"проверка пройдена":"цель не подтверждена"}`:"Для строгой проверки пока нет данных");
+  text("ml-selective-status",selective?`Подбор фильтра: ${selective.calibration_accuracy==null?"нет отбора":`${selective.calibration_accuracy}%`} → строгая проверка: ${selective.accuracy==null?"нет подходящих сигналов":`${selective.accuracy}% успеха`} · ${selective.samples} примеров · отобрано ${selective.coverage}% · ${selective.passed?"проверка пройдена":"цель не подтверждена"}`:"Для строгой проверки пока нет данных");
   const labels={WAIT:"—",CALL:"CALL",PUT:"PUT"};
   const waiting=d.engine==="gpt"&&d.forecast_pending&&d.fresh;
   text("signal-action",{CALL:"ВВЕРХ ↑",PUT:"ВНИЗ ↓",WAIT:d.status==="filtered"?"НЕТ ПОДТВЕРЖДЁННОГО СИГНАЛА":state.analysisError?(state.engine==="gpt"?"ОШИБКА GPT":"ОШИБКА ML"):d.forecast_state==="stale_data"?"ДАННЫЕ УСТАРЕЛИ":d.forecast_state==="expired_entry"?"ВРЕМЯ ВХОДА ПРОШЛО":waiting?(state.analyzing?"ПОЛУЧАЕМ ПРОГНОЗ GPT":state.session?.gpt_ready?"ЗАПРОСИТЕ GPT-ПРОГНОЗ":"НУЖЕН OPENAI API-КЛЮЧ"):d.status==="loading"?"Подготовка модели":"НЕТ НАПРАВЛЕНИЯ"}[d.direction]);
@@ -167,7 +167,7 @@ function renderSnapshot() {
   $("signal-state").className=`signal-state ${d.direction.toLowerCase()}`;
   text("signal-summary",state.analysisError||(d.status==="filtered"?`Предварительное направление: ${d.raw_direction||"—"}. Целевая точность на независимой истории не подтверждена для этого прогноза. `:"")+d.reasons.join(" "));$("signal-explanation").open=(d.engine==="gpt"&&!waiting)||(d.direction==="WAIT"&&(!waiting||!!state.analysisError));
   $("forecast-quality").hidden=d.direction==="WAIT"&&d.status!=="filtered";
-  text("quality-badge",d.engine==="gpt"?"GPT · точность не проверена":d.quality==="qualified"?"Фильтры качества пройдены":"Слабый сигнал · высокий риск");
+  text("quality-badge",d.engine==="gpt"?(d.signal_eligible?"GPT · независимая проверка пройдена":"GPT · цель пока не подтверждена"):d.quality==="qualified"?"Фильтры качества пройдены":"Слабый сигнал · высокий риск");
   $("quality-badge").className=`quality-badge ${d.quality||"weak"}`;
   text("chance-value",chance(d));text("chance-note",d.probability?`Оценка только для ${d.label}, экспирация ${d.expiry} мин, по котировкам ${d.provider}. ${d.probability.note}`:(d.engine==="gpt"?"Для GPT вероятность выигрыша не откалибрована.":"Оценка недоступна"));
   text("chance-interval",d.probability?.interval?`Исторический диапазон 95%: ${d.probability.interval[0]}–${d.probability.interval[1]}%. Это не гарантия для текущей сделки.`:"Для исторического диапазона пока мало данных.");
@@ -179,7 +179,7 @@ function renderSnapshot() {
   text("rsi-value",i.rsi==null?"—":i.rsi.toFixed(1));$("rsi-marker").style.left=`${i.rsi??50}%`;
   text("atr-value",price(i.atr));text("chart-source",`${d.provider} · ${d.fresh?"актуальные данные":"данные устарели"}`);
   $("live-dot").className=`live-dot ${d.fresh?"live":""}`;text("chart-update",`${clockTime(d.data_as_of)} · ${state.session.timezone}`);
-  drawChart();tick();renderLiveQuote();
+  drawChart();tick();renderLiveQuote();renderPerformance();
 }
 function drawChart() {
   const canvas=$("market-chart"),rect=canvas.getBoundingClientRect();if(!rect.width)return;
@@ -218,7 +218,7 @@ async function requestAnalysis(auto=false){
   const seq=++state.sequence;
   button.querySelector("span").textContent="Анализируем рынок…";
   try {
-    const run=state.session.preview?await api(`/api/market?symbol=${encodeURIComponent(symbol)}&expiry=${expiry}${entry?`&entry_at=${entry}`:""}`):await api("/api/analyses",{method:"POST",body:JSON.stringify({symbol,expiry,entry_at:entry,engine:state.engine,strict:state.engine==="ml"&&$("strict-ml").checked,model:$("gpt-model").value||"gpt-6-luna"})});
+    const run=state.session.preview?await api(`/api/market?symbol=${encodeURIComponent(symbol)}&expiry=${expiry}${entry?`&entry_at=${entry}`:""}`):await api("/api/analyses",{method:"POST",body:JSON.stringify({symbol,expiry,entry_at:entry,engine:state.engine,strict:$("strict-ml").checked,model:$("gpt-model").value||"gpt-6-luna"})});
     if(seq===state.sequence){state.snapshot=run;state.snapshot.forecast_at=run.server_time;state.analysisError=null;state.snapshot.forecast_data_as_of=run.data_as_of;state.snapshot.selection_entry_at=entry;state.offset=run.server_time-Date.now()/1000;renderSnapshot();}
     if(state.session.preview)toast("Прогноз готов. Для сохранения и автоанализа откройте Mini App в Telegram.");
     else {state.seenId=Math.max(state.seenId,run.id);toast(`Анализ #${run.id} · ${run.label}: ${run.direction==="WAIT"?"нет прогноза":run.direction}.`);await loadHistory();}
@@ -245,7 +245,7 @@ $("watch-toggle").addEventListener("click",async()=>{
   catch(error){toast(error.message);}finally{button.disabled=false;}
 });
 function node(tag,className,value){const e=document.createElement(tag);if(className)e.className=className;if(value!=null)e.textContent=value;return e;}
-function chance(run) { return run.probability?.value==null ? "—" : `≈${Math.round(run.probability.value)}%`; }
+function chance(run) { return run.probability?.method!=="historical_bin"||run.probability?.value==null ? "—" : `≈${Math.round(run.probability.value)}%`; }
 function phase(run) {
   if(run.result)return run.result;
   if(run.direction==="WAIT")return "Нет прогноза";
@@ -267,7 +267,7 @@ function resultButtons(run) {
   return buttons;
 }
 function renderFeed() {
-  const visible=state.history.filter(r=>!$("strict-ml").checked||r.engine==="gpt"||r.signal_eligible||r.direction==="WAIT");
+  const visible=state.history.filter(r=>!$("strict-ml").checked||r.signal_eligible||r.direction==="WAIT");
   $("recent-list").replaceChildren(...visible.slice(0,6).map(r=>{
     const e=node("article",`signal-feed-card ${r.quality||""}`),head=node("div","signal-feed-title");
     head.append(node("strong","",r.label),node("span",`direction-pill ${r.direction.toLowerCase()}`,r.direction==="WAIT"?"Нет прогноза":r.direction));
@@ -286,8 +286,9 @@ async function loadHistory() {
   state.historyLoading=true;
   try {
     const data=await api("/api/history");const s=data.stats;
+    try{state.performance=await api("/api/performance");renderPerformance();}catch{}
     state.offset=data.server_time-Date.now()/1000;
-    const fresh=data.items.filter(r=>r.id>state.seenId && r.direction!=="WAIT" && (!$("strict-ml").checked||r.engine==="gpt"||r.signal_eligible));
+    const fresh=data.items.filter(r=>r.id>state.seenId && r.direction!=="WAIT" && (!$("strict-ml").checked||r.signal_eligible));
     if(state.historyLoaded && fresh.length){const r=fresh[0];toast(`Новый сигнал в Mini App: ${r.label} ${r.direction} · шанс по модели ${chance(r)}${r.quality==="weak"?" · слабый сигнал":""}.`);tg?.HapticFeedback?.notificationOccurred?.("success");}
     state.seenId=Math.max(state.seenId,...data.items.map(r=>r.id));state.historyLoaded=true;state.history=data.items;
     renderFeed();
@@ -353,7 +354,7 @@ function tick(){
   text("clock",`${clockTime(now())} · ${state.session?.timezone||"UTC+3"}`);
   for(const r of state.history){
     document.querySelectorAll(`[data-run-clock="${r.id}"]`).forEach(el=>{el.textContent=phase(r);el.classList.toggle("live",!r.result&&r.entry_at<=now()&&r.close_at>now());});
-    if(document.hidden || r.result || r.direction==="WAIT" || ($("strict-ml").checked&&r.engine!=="gpt"&&!r.signal_eligible))continue;
+    if(document.hidden || r.result || r.direction==="WAIT" || ($("strict-ml").checked&&!r.signal_eligible))continue;
     const remaining=r.entry_at-now();
     const event=remaining>0&&remaining<=10?"soon":remaining<=0&&remaining>=-5?"entry":now()>=r.close_at&&now()<r.close_at+5?"close":null;
     const key=`${r.id}:${event}`;
@@ -378,7 +379,7 @@ async function boot(){
     text("user-name",state.session.user.first_name);text("avatar",state.session.user.first_name.charAt(0).toUpperCase());
     text("session-mode",state.session.preview?"Локальный просмотр":"Терминал владельцев");text("environment",(state.session.preview?"PREVIEW":"MINI APP")+" · v"+state.session.version);
     $("preview-notice").hidden=!state.session.preview;
-    text("strict-ml-label",`Только сигналы с исторической точностью от ${state.session.model_target_win_rate||70}%`);
+    text("strict-ml-label",`Только сигналы с подтверждённой целью от ${state.session.model_target_win_rate||80}%`);
     setupGPT();
     try{$("strict-ml").checked=localStorage.getItem("strictML")==="true";}catch{}
     text("forex-status",state.session.forex_ready?"Ключ настроен · доступ проверяется при запросе":"Ожидает API-ключ");$("forex-status").classList.toggle("ready",state.session.forex_ready);
@@ -430,3 +431,11 @@ function selectedEntry(validate=true){
 $("entry-mode").addEventListener("change",()=>{$("custom-entry").hidden=$("entry-mode").value!=="custom";state.lastGPT=0;if($("entry-mode").value==="auto"||$("custom-entry").value)loadMarket(true);});
 $("custom-entry").addEventListener("change",()=>{try{selectedEntry();state.lastGPT=0;loadMarket(true);}catch(error){toast(error.message);}});
 $("custom-expiry").addEventListener("change",()=>{const value=Number($("custom-expiry").value);if(!Number.isInteger(value)||value<1||value>60){toast("Экспирация: от 1 до 60 минут.");return;}state.expiry=value;state.lastGPT=0;document.querySelectorAll("[data-expiry]").forEach(b=>b.classList.toggle("active",Number(b.dataset.expiry)===value));loadMarket(true);});
+
+function renderPerformance(){
+  if(!state.performance){text("model-performance","Ожидаем автоматическую проверку новых прогнозов после экспирации.");return;}
+  const groups=state.performance.groups.filter(g=>g.symbol===state.symbol&&g.expiry===state.expiry);
+  if(!groups.length){text("model-performance",`Проверенных исходов ${state.symbol}, ${state.expiry} мин пока нет. Цель ${state.performance.target}% не подтверждена. Ожидают проверки: ${state.performance.pending_matured||0}.`);return;}
+  $("model-performance").replaceChildren(...groups.slice(-12).map(g=>node("p","",
+    `${g.model_key} · задержка входа ${g.entry_delay} мин · ${g.samples} неперекрывающихся исходов · ${g.accuracy==null?"—":g.accuracy+"%"} · диапазон ${g.interval?g.interval.join("–")+"%":"—"} · доля направленных прогнозов ${g.direction_coverage}% · исключено ${g.excluded} · ${g.passed?"цель подтверждена на этих данных":"цель не подтверждена"}`)));
+}

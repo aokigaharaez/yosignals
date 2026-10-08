@@ -33,7 +33,8 @@ def test_calibration_counts_draws_as_nonwins_and_keeps_bin_boundaries():
     for score in (.50, .60, .70, 1.):
         fallback = probability_estimate(score, scores[:29], wins[:29], draw_rate=.1)
         assert fallback["method"] == "uncalibrated_model"
-        assert fallback["value"] == round(score * .9 * 100, 1)
+        assert fallback["value"] is None and fallback["interval"] is None
+        assert fallback["confidence_score"] == round(score * 100, 1)
         assert fallback["interval"] is None
 
 
@@ -62,7 +63,13 @@ def test_weak_forecast_remains_visible_for_every_expiry(expiry):
     run = analyze(candles(1500), expiry, Settings(model_min_score=.99, model_min_validation=.99))
     assert run["direction"] in {"CALL", "PUT"}
     assert run["model_ready"] and run["quality"] == "weak"
-    assert 0 <= run["probability"]["value"] <= 100
+    estimate = run["probability"]
+    if estimate["value"] is None:
+        assert estimate["method"] == "uncalibrated_model" and estimate["interval"] is None
+        assert 0 <= estimate["confidence_score"] <= 100
+    else:
+        assert estimate["method"] == "historical_bin" and estimate["samples"] >= 30
+        assert 0 <= estimate["value"] <= 100
     assert run["validation"]["calibration_samples"] > 0
     json.dumps(run, allow_nan=False)
 

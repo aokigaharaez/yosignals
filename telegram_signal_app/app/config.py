@@ -28,7 +28,7 @@ class Settings:
     forex_max_data_age_seconds: int = 180
     model_min_score: float = .60
     model_min_validation: float = .54
-    model_target_win_rate: float = .70
+    model_target_win_rate: float = .80
     model_min_calibration_samples: int = 150
     model_min_test_signals: int = 100
     model_retrain_seconds: int = 600
