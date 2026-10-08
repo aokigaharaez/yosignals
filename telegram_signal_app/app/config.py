@@ -33,6 +33,7 @@ class Settings:
     model_retrain_seconds: int = 600
     model_history_limit: int = 20000
     crypto_backfill_candles: int = 10000
+    forex_history_candles: int = 5000
     auth_max_age_seconds: int = 3600
 
     @property
@@ -85,6 +86,8 @@ def load_settings() -> Settings:
         raise ValueError("Invalid ML training settings")
     if not 1500 <= settings.crypto_backfill_candles <= settings.model_history_limit:
         raise ValueError("Invalid crypto backfill limit")
+    if not 1500 <= settings.forex_history_candles <= min(5000, settings.model_history_limit):
+        raise ValueError("FOREX_HISTORY_CANDLES must be between 1500 and min(5000, MODEL_HISTORY_LIMIT)")
     if not 1 <= settings.market_cache_seconds <= 120 or not 30 <= settings.max_data_age_seconds <= 180:
         raise ValueError("Invalid market freshness settings")
     if not 60 <= settings.forex_max_data_age_seconds <= 300:

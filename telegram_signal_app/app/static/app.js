@@ -119,10 +119,10 @@ function renderSnapshot() {
   $("asset-change").className=d.change_percent>=0?"positive":"negative";
   text("data-metric",!d.fresh?"Устарели":d.delayed?"Задержка источника":"Актуальны");text("data-detail",`${d.sample_count} свечей · возраст ${Math.round(now()-d.data_as_of)} сек · ${clockTime(d.data_as_of)}`);
   text("score-metric",chance(d));
-  text("probability-detail",d.probability?(d.probability.method==="historical_bin"?`${d.probability.samples} похожих прогнозов`:"Предварительная оценка · без калибровки"):"Недостаточно данных для оценки");
+  text("probability-detail",d.probability?(d.probability.method==="historical_bin"?`${d.label} · ${d.expiry} мин · ${d.probability.samples} похожих прогнозов`:"Предварительная оценка · без калибровки"):"Недостаточно данных для оценки");
   text("validation-metric",d.validation?`${d.validation.accuracy}%`:"—");
-  text("validation-detail",d.validation?`${d.validation.samples} примеров · база ${d.validation.baseline}%`:"Недостаточно истории");
-  text("ml-training-status",d.training?`Обучение: ${d.training.history_candles} свечей · ${d.validation?.feature_count||0} признаков · обновление модели раз в ${Math.round((state.session?.model_retrain_seconds||600)/60)} мин`:"Ожидаем обучение модели");
+  text("validation-detail",d.validation?`${d.label} · ${d.validation.samples} примеров · база ${d.validation.baseline}%`:"Недостаточно истории");
+  text("ml-training-status",d.training?`Обучение ${d.label}: ${d.training.history_candles} свечей · ${d.validation?.feature_count||0} признаков · обновление модели раз в ${Math.round((state.session?.model_retrain_seconds||600)/60)} мин`:"Ожидаем обучение модели");
   const selective=d.validation?.selective;
   text("ml-selective-status",selective?`Строгая проверка: ${selective.accuracy==null?"нет подходящих сигналов":`${selective.accuracy}% успеха`} · ${selective.samples} примеров · отобрано ${selective.coverage}% · ${selective.passed?"проверка пройдена":"цель не подтверждена"}`:"Для строгой проверки пока нет данных");
   const labels={WAIT:"—",CALL:"CALL",PUT:"PUT"};
@@ -134,7 +134,7 @@ function renderSnapshot() {
   $("forecast-quality").hidden=d.direction==="WAIT"&&d.status!=="filtered";
   text("quality-badge",d.engine==="gpt"?"GPT · точность не проверена":d.quality==="qualified"?"Фильтры качества пройдены":"Слабый сигнал · высокий риск");
   $("quality-badge").className=`quality-badge ${d.quality||"weak"}`;
-  text("chance-value",chance(d));text("chance-note",d.probability?.note||(d.engine==="gpt"?"Для GPT вероятность выигрыша не откалибрована.":"Оценка недоступна"));
+  text("chance-value",chance(d));text("chance-note",d.probability?`Оценка только для ${d.label}, экспирация ${d.expiry} мин, по котировкам ${d.provider}. ${d.probability.note}`:(d.engine==="gpt"?"Для GPT вероятность выигрыша не откалибрована.":"Оценка недоступна"));
   text("chance-interval",d.probability?.interval?`Исторический диапазон 95%: ${d.probability.interval[0]}–${d.probability.interval[1]}%. Это не гарантия для текущей сделки.`:"Для исторического диапазона пока мало данных.");
   $("signal-timing").hidden=d.direction==="WAIT";
   text("close-time",clockTime(d.close_at));
@@ -347,7 +347,6 @@ async function boot(){
     try{$("strict-ml").checked=localStorage.getItem("strictML")==="true";}catch{}
     text("forex-status",state.session.forex_ready?"Ключ настроен · доступ проверяется при запросе":"Ожидает API-ключ");$("forex-status").classList.toggle("ready",state.session.forex_ready);
     text("telegram-status",state.session.bot_ready?(state.session.webapp_ready?"Бот и адрес настроены":"Бот подключён · нужен HTTPS-адрес"):(state.session.bot_status==="loading"?"Бот запускается в фоне":"Нужно подключить бота"));$("telegram-status").classList.toggle("ready",state.session.bot_ready&&state.session.webapp_ready);
-    if(!state.session.forex_ready){state.category="crypto";state.symbol="BTCUSDT";}
     renderAssets();await loadMarket(true);await loadHistory();
     if(!state.session.preview){state.watch=await api("/api/watch");renderWatch();}
   }catch(error){

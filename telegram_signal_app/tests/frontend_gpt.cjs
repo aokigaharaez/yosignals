@@ -41,4 +41,12 @@ node('entry-mode').value='auto';node('gpt-model').value='gpt-6-luna';
   context.harness.renderSnapshot();
   assert.equal(node('signal-direction').textContent,'CALL');
   console.log('Strict ML rejects unverified forecasts and retains eligible directions');
+  state.snapshot={...state.snapshot,symbol:'EURUSD',label:'EUR/USD',provider:'Twelve Data',
+    probability:{value:56,method:'historical_bin',samples:100,note:'Calibrated'},
+    validation:{accuracy:55,samples:50,baseline:50}};
+  context.harness.renderSnapshot();
+  assert.match(node('chance-note').textContent,/EUR\/USD, экспирация 3 мин, по котировкам Twelve Data/);
+  assert.match(node('probability-detail').textContent,/EUR\/USD/);
+  assert.match(node('validation-detail').textContent,/EUR\/USD/);
+  console.log('EUR/USD probability is explicitly labeled with pair, expiry and source');
 })().catch(error=>{console.error(error);process.exitCode=1});

@@ -82,9 +82,14 @@ class SignalService:
         age = max(0, now - last.time - 60)
         fresh = age <= freshness_limit
         if not fresh:
-            result.update(direction="WAIT", probability=None, quality="unavailable", reasons=["Котировки устарели или рынок закрыт. Для круглосуточного анализа доступны BTC/USDT и ETH/USDT, если их источник отвечает."])
+            result.update(direction="WAIT", probability=None, quality="unavailable", reasons=[f"Котировки {INSTRUMENTS[symbol].label} устарели или рынок закрыт. Дождитесь обновления этой пары."])
         elif entry - now < 10:
             result.update(direction="WAIT", probability=None, quality="unavailable", reasons=["Расчёт задержался. Повторите анализ для нового времени входа."])
+        context = {"symbol": symbol, "label": INSTRUMENTS[symbol].label, "provider": INSTRUMENTS[symbol].provider,
+                   "expiry": expiry, "entry_delay": lead}
+        for field in ("probability", "validation", "training"):
+            if result.get(field):
+                result[field] = {**result[field], **context}
         result.update(symbol=symbol, label=INSTRUMENTS[symbol].label, provider=INSTRUMENTS[symbol].provider,
                       category=INSTRUMENTS[symbol].category, expiry=expiry, candle_time=last.time,
                       data_as_of=last.time + 60, data_age_seconds=age, fresh=fresh, price=last.close,

@@ -1,6 +1,6 @@
 """Read-only, repeatable chronological evaluation of the real candle archive.
 
-Example: python -m app.evaluate --db signals.db --symbol BTCUSDT --expiry 3
+Example: python -m app.evaluate --db signals.db --symbol EURUSD --expiry 3
 No broker orders, random market fallback, or API keys are used.
 """
 import argparse
@@ -36,7 +36,7 @@ async def evaluate_archive(path, symbol, expiry):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", default="signals.db")
-    parser.add_argument("--symbol", choices=INSTRUMENTS, default="BTCUSDT")
+    parser.add_argument("--symbol", choices=INSTRUMENTS, default="EURUSD")
     parser.add_argument("--expiry", type=int, choices=range(1,61), default=3)
     parser.add_argument("--output")
     args = parser.parse_args()

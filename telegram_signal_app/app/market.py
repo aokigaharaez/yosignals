@@ -103,7 +103,7 @@ class MarketData:
             if not self.settings.twelve_data_api_key:
                 raise MarketError("missing_key", "Для валютных пар добавьте TWELVE_DATA_API_KEY в Railway Variables (локально — в .env) и перезапустите приложение.")
             response = await self.client.get("https://api.twelvedata.com/time_series", params={
-                "symbol": instrument.provider_symbol, "interval": "1min", "outputsize": 1500,
+                "symbol": instrument.provider_symbol, "interval": "1min", "outputsize": self.settings.forex_history_candles,
                 "timezone": "UTC", "order": "ASC", "apikey": self.settings.twelve_data_api_key,
             })
             self._check_http(response)
@@ -115,6 +115,8 @@ class MarketData:
                 if code in {"401", "403"}:
                     raise MarketError("provider_access", "Проверьте ключ Twelve Data и доступ к минутным данным в тарифе.")
                 raise MarketError("provider_error", "Twelve Data не предоставил свечи для этого актива.")
+            if payload.get("meta", {}).get("symbol", instrument.provider_symbol) != instrument.provider_symbol:
+                raise MarketError("invalid_data", "Источник вернул свечи другой валютной пары. Анализ остановлен.")
             return [Candle(
                 int(datetime.fromisoformat(row["datetime"]).replace(tzinfo=timezone.utc).timestamp()),
                 *(float(row[key]) for key in ("open", "high", "low", "close")),

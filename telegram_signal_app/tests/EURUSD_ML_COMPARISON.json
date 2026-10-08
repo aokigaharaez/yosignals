@@ -1,0 +1,182 @@
+[
+  {
+    "symbol": "EURUSD",
+    "provider": "Twelve Data",
+    "expiry": 1,
+    "candles": 5000,
+    "data_as_of": 1791452040,
+    "direction": "CALL",
+    "probability": {
+      "value": 50.4,
+      "method": "historical_bin",
+      "samples": 397,
+      "wins": 200,
+      "interval": [
+        45.5,
+        55.3
+      ],
+      "note": "Калибровка по 397 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+    },
+    "validation": {
+      "samples": 488,
+      "training_samples": 2762,
+      "calibration_samples": 487,
+      "accuracy": 56.1,
+      "baseline": 57.0,
+      "selected_samples": 87,
+      "selected_accuracy": 52.9,
+      "brier_score": 0.2499,
+      "model_selection": {
+        "selected": "legacy_linear",
+        "folds": 2,
+        "log_loss": {
+          "legacy_linear": 0.6927,
+          "expanded_linear": 0.7035,
+          "regularized_linear": 0.7009,
+          "boosting": 0.6914,
+          "extra_trees": 0.6948,
+          "ensemble": 0.694
+        },
+        "method": "purged_expanding_training_only"
+      },
+      "feature_count": 10,
+      "selective": {
+        "target": 80.0,
+        "threshold": null,
+        "samples": 0,
+        "wins": 0,
+        "accuracy": null,
+        "interval": null,
+        "coverage": 0.0,
+        "recent_accuracy": null,
+        "passed": false,
+        "method": "calibration_threshold_untouched_test"
+      },
+      "training_cutoff": 1791334800,
+      "evaluated_until": 1791451980,
+      "method": "train_calibration_test_purged_nonoverlapping"
+    },
+    "signal_eligible": false,
+    "train_seconds": 5.907
+  },
+  {
+    "symbol": "EURUSD",
+    "provider": "Twelve Data",
+    "expiry": 3,
+    "candles": 5000,
+    "data_as_of": 1791452040,
+    "direction": "CALL",
+    "probability": {
+      "value": 48.1,
+      "method": "historical_bin",
+      "samples": 206,
+      "wins": 99,
+      "interval": [
+        41.3,
+        54.9
+      ],
+      "note": "Калибровка по 206 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+    },
+    "validation": {
+      "samples": 244,
+      "training_samples": 2851,
+      "calibration_samples": 243,
+      "accuracy": 50.4,
+      "baseline": 51.2,
+      "selected_samples": 19,
+      "selected_accuracy": 73.7,
+      "brier_score": 0.2537,
+      "model_selection": {
+        "selected": "extra_trees",
+        "folds": 2,
+        "log_loss": {
+          "legacy_linear": 0.7002,
+          "expanded_linear": 0.7191,
+          "regularized_linear": 0.711,
+          "boosting": 0.7033,
+          "extra_trees": 0.6922,
+          "ensemble": 0.6972
+        },
+        "method": "purged_expanding_training_only"
+      },
+      "feature_count": 40,
+      "selective": {
+        "target": 80.0,
+        "threshold": null,
+        "samples": 0,
+        "wins": 0,
+        "accuracy": null,
+        "interval": null,
+        "coverage": 0.0,
+        "recent_accuracy": null,
+        "passed": false,
+        "method": "calibration_threshold_untouched_test"
+      },
+      "training_cutoff": 1791334740,
+      "evaluated_until": 1791451860,
+      "method": "train_calibration_test_purged_nonoverlapping"
+    },
+    "signal_eligible": false,
+    "train_seconds": 6.743
+  },
+  {
+    "symbol": "EURUSD",
+    "provider": "Twelve Data",
+    "expiry": 5,
+    "candles": 5000,
+    "data_as_of": 1791452040,
+    "direction": "CALL",
+    "probability": {
+      "value": 50.3,
+      "method": "historical_bin",
+      "samples": 153,
+      "wins": 77,
+      "interval": [
+        42.5,
+        58.1
+      ],
+      "note": "Калибровка по 153 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+    },
+    "validation": {
+      "samples": 163,
+      "training_samples": 2867,
+      "calibration_samples": 162,
+      "accuracy": 52.8,
+      "baseline": 56.4,
+      "selected_samples": 3,
+      "selected_accuracy": 33.3,
+      "brier_score": 0.2506,
+      "model_selection": {
+        "selected": "legacy_linear",
+        "folds": 2,
+        "log_loss": {
+          "legacy_linear": 0.7081,
+          "expanded_linear": 0.7446,
+          "regularized_linear": 0.7358,
+          "boosting": 0.7144,
+          "extra_trees": 0.709,
+          "ensemble": 0.7167
+        },
+        "method": "purged_expanding_training_only"
+      },
+      "feature_count": 10,
+      "selective": {
+        "target": 80.0,
+        "threshold": null,
+        "samples": 0,
+        "wins": 0,
+        "accuracy": null,
+        "interval": null,
+        "coverage": 0.0,
+        "recent_accuracy": null,
+        "passed": false,
+        "method": "calibration_threshold_untouched_test"
+      },
+      "training_cutoff": 1791334680,
+      "evaluated_until": 1791451920,
+      "method": "train_calibration_test_purged_nonoverlapping"
+    },
+    "signal_eligible": false,
+    "train_seconds": 5.875
+  }
+]
