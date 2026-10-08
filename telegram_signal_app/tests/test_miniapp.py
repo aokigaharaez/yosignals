@@ -1,4 +1,5 @@
 """Behavioural checks for on-demand forecasts and Mini App delivery."""
+import asyncio
 import json
 import time
 from dataclasses import replace
@@ -216,7 +217,14 @@ def test_manual_analysis_and_autoscan_work_with_bot_polling_disabled(tmp_path, m
     with TestClient(app) as client:
         app.state.service.analyzer, app.state.service.model_status = analyze, "ready"
         client.headers["Authorization"] = "tma " + signed()
-        run_response = client.post("/api/analyses", json={"symbol": "BTCUSDT", "expiry": 3})
+        for _ in range(3):
+            run_response = client.post("/api/analyses", json={"symbol": "BTCUSDT", "expiry": 3})
+            if run_response.status_code == 200:
+                break
+            assert run_response.status_code == 503 and run_response.json()["code"] == "model_training"
+            async def wait_for_training():
+                await asyncio.gather(*app.state.service.training_tasks.values())
+            client.portal.call(wait_for_training)
         assert run_response.status_code == 200
         run = run_response.json()
         assert run["direction"] in {"CALL", "PUT"} and run["probability"]

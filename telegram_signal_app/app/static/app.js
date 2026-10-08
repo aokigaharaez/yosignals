@@ -114,7 +114,7 @@ function renderSnapshot() {
   let d=state.snapshot;if(!d)return;
   if(state.engine==="ml"&&$("strict-ml").checked&&!d.signal_eligible){d={...d,raw_direction:d.raw_direction||d.direction,direction:"WAIT",status:"filtered"};}
   $("chart-empty").hidden=true;
-  text("signal-updated",`${d.engine==="gpt"?d.model:({legacy_linear:"ML · линейная",expanded_linear:"ML · расширенная",boosting:"ML · бустинг",extra_trees:"ML · деревья",regularized_linear:"ML · регуляризация",ensemble:"ML · ансамбль"}[d.validation?.model_selection?.selected]||"ML Model")} · анализ ${clockTime(d.forecast_at||d.server_time)} · вход ${clockTime(d.entry_at)} · экспирация ${d.expiry} мин`);
+  text("signal-updated",`${d.engine==="gpt"?d.model:({legacy_linear:"ML · линейная",expanded_linear:"ML · расширенная",boosting:"ML · бустинг",extra_trees:"ML · деревья",regularized_linear:"ML · регуляризация",ensemble:"ML · ансамбль",strong_linear:"ML · сильная регуляризация",shallow_boosting:"ML · простой бустинг",deep_boosting:"ML · расширенный бустинг",shallow_trees:"ML · простые деревья"}[d.validation?.model_selection?.selected]||"ML Model")} · анализ ${clockTime(d.forecast_at||d.server_time)} · вход ${clockTime(d.entry_at)} · экспирация ${d.expiry} мин`);
   text("asset-price",price(d.price));text("asset-change",`${d.change_percent>=0?"+":""}${d.change_percent.toFixed(3)}% за 60 мин`);
   $("asset-change").className=d.change_percent>=0?"positive":"negative";
   text("data-metric",!d.fresh?"Устарели":d.delayed?"Задержка источника":"Актуальны");text("data-detail",`${d.sample_count} свечей · возраст ${Math.round(now()-d.data_as_of)} сек · ${clockTime(d.data_as_of)}`);
@@ -124,7 +124,7 @@ function renderSnapshot() {
   text("validation-detail",d.validation?`${d.label} · ${d.validation.samples} примеров · база ${d.validation.baseline}%`:"Недостаточно истории");
   text("ml-training-status",d.training?`Обучение ${d.label}: ${d.training.history_candles} свечей · ${d.validation?.feature_count||0} признаков · обновление модели раз в ${Math.round((state.session?.model_retrain_seconds||600)/60)} мин`:"Ожидаем обучение модели");
   const selective=d.validation?.selective;
-  text("ml-selective-status",selective?`Строгая проверка: ${selective.accuracy==null?"нет подходящих сигналов":`${selective.accuracy}% успеха`} · ${selective.samples} примеров · отобрано ${selective.coverage}% · ${selective.passed?"проверка пройдена":"цель не подтверждена"}`:"Для строгой проверки пока нет данных");
+  text("ml-selective-status",selective?`Калибровка: ${selective.calibration_accuracy==null?"нет отбора":`${selective.calibration_accuracy}%`} → строгая проверка: ${selective.accuracy==null?"нет подходящих сигналов":`${selective.accuracy}% успеха`} · ${selective.samples} примеров · отобрано ${selective.coverage}% · ${selective.passed?"проверка пройдена":"цель не подтверждена"}`:"Для строгой проверки пока нет данных");
   const labels={WAIT:"—",CALL:"CALL",PUT:"PUT"};
   const waiting=d.engine==="gpt"&&d.forecast_pending&&d.fresh;
   text("signal-action",{CALL:"ВВЕРХ ↑",PUT:"ВНИЗ ↓",WAIT:d.status==="filtered"?"НЕТ ПОДТВЕРЖДЁННОГО СИГНАЛА":state.analysisError?(state.engine==="gpt"?"ОШИБКА GPT":"ОШИБКА ML"):d.forecast_state==="stale_data"?"ДАННЫЕ УСТАРЕЛИ":d.forecast_state==="expired_entry"?"ВРЕМЯ ВХОДА ПРОШЛО":waiting?(state.analyzing?"ПОЛУЧАЕМ ПРОГНОЗ GPT":state.session?.gpt_ready?"ЗАПРОСИТЕ GPT-ПРОГНОЗ":"НУЖЕН OPENAI API-КЛЮЧ"):d.status==="loading"?"Подготовка модели":"НЕТ НАПРАВЛЕНИЯ"}[d.direction]);
@@ -187,7 +187,7 @@ async function requestAnalysis(auto=false){
     if(seq===state.sequence){state.snapshot=run;state.snapshot.forecast_at=run.server_time;state.analysisError=null;state.snapshot.forecast_data_as_of=run.data_as_of;state.snapshot.selection_entry_at=entry;state.offset=run.server_time-Date.now()/1000;renderSnapshot();}
     if(state.session.preview)toast("Прогноз готов. Для сохранения и автоанализа откройте Mini App в Telegram.");
     else {state.seenId=Math.max(state.seenId,run.id);toast(`Анализ #${run.id} · ${run.label}: ${run.direction==="WAIT"?"нет прогноза":run.direction}.`);await loadHistory();}
-  }catch(error){state.analysisError=error.message;if(!auto)toast(error.message);text("signal-updated",`Обновление анализа не удалось: ${error.message}`);if(!state.snapshot||state.snapshot.direction==="WAIT"){text("signal-direction","—");text("signal-action",state.engine==="gpt"?"ОШИБКА GPT":"ОШИБКА ML");text("signal-summary",error.message);$("signal-explanation").open=true;}}finally{button.disabled=false;state.analyzing=false;$("analysis-progress").hidden=true;button.querySelector("span").textContent="Получить сигнал";}
+  }catch(error){if(error.code==="model_training"){state.analysisError=null;if(!auto)toast(error.message);text("signal-action","ОБУЧЕНИЕ ML В ФОНЕ");text("signal-summary",error.message);$("signal-explanation").open=true;return;}state.analysisError=error.message;if(!auto)toast(error.message);text("signal-updated",`Обновление анализа не удалось: ${error.message}`);if(!state.snapshot||state.snapshot.direction==="WAIT"){text("signal-direction","—");text("signal-action",state.engine==="gpt"?"ОШИБКА GPT":"ОШИБКА ML");text("signal-summary",error.message);$("signal-explanation").open=true;}}finally{button.disabled=false;state.analyzing=false;$("analysis-progress").hidden=true;button.querySelector("span").textContent="Получить сигнал";}
 }
 $("strict-ml").addEventListener("change",async()=>{
   if(state.snapshot)renderSnapshot();
@@ -332,7 +332,7 @@ function tick(){
   if(state.analyzing){const elapsed=Math.max(0,Math.floor(now()-state.analysisStarted));text("analysis-progress",`${state.engine==="gpt"?"Получаем прогноз GPT":"Рассчитываем ML-прогноз"} · ${elapsed} сек`);}
   const d=state.snapshot;if(!d)return;
   const forecastOld=now()-(d.forecast_data_as_of||d.data_as_of)>(d.max_data_age_seconds||state.session.max_data_age_seconds||90);
-  text("signal-updated",`${d.engine==="gpt"?d.model:({legacy_linear:"ML · линейная",expanded_linear:"ML · расширенная",boosting:"ML · бустинг",extra_trees:"ML · деревья",regularized_linear:"ML · регуляризация",ensemble:"ML · ансамбль"}[d.validation?.model_selection?.selected]||"ML Model")} · анализ ${clockTime(d.forecast_at||d.server_time)} · вход ${clockTime(d.entry_at)} · ${d.expiry} мин${state.analysisError?` · ${state.analysisError}`:""}${forecastOld?" · прогноз устарел":now()>=d.entry_at?" · время входа прошло":""}`);
+  text("signal-updated",`${d.engine==="gpt"?d.model:({legacy_linear:"ML · линейная",expanded_linear:"ML · расширенная",boosting:"ML · бустинг",extra_trees:"ML · деревья",regularized_linear:"ML · регуляризация",ensemble:"ML · ансамбль",strong_linear:"ML · сильная регуляризация",shallow_boosting:"ML · простой бустинг",deep_boosting:"ML · расширенный бустинг",shallow_trees:"ML · простые деревья"}[d.validation?.model_selection?.selected]||"ML Model")} · анализ ${clockTime(d.forecast_at||d.server_time)} · вход ${clockTime(d.entry_at)} · ${d.expiry} мин${state.analysisError?` · ${state.analysisError}`:""}${forecastOld?" · прогноз устарел":now()>=d.entry_at?" · время входа прошло":""}`);
   const remaining=Math.ceil(d.entry_at-now());text("entry-countdown",remaining>0?`${remaining} сек`:"Вход завершён");
   if(d.direction!=="WAIT"&&remaining<=0)text("entry-countdown",d.close_at>now()?"Сделка в процессе":"Экспирация завершена");
   if(now()-d.data_as_of>(d.max_data_age_seconds||state.session.max_data_age_seconds||90)){text("data-metric","Устарели");$("live-dot").className="live-dot";text("chart-source",`${d.provider} · данные устарели`);text("data-detail","Последний анализ сохранён. Ожидаем свежие котировки от источника.");}
@@ -343,6 +343,7 @@ async function boot(){
     text("user-name",state.session.user.first_name);text("avatar",state.session.user.first_name.charAt(0).toUpperCase());
     text("session-mode",state.session.preview?"Локальный просмотр":"Терминал владельцев");text("environment",(state.session.preview?"PREVIEW":"MINI APP")+" · v"+state.session.version);
     $("preview-notice").hidden=!state.session.preview;
+    text("strict-ml-label",`Только сигналы с исторической точностью от ${state.session.model_target_win_rate||70}%`);
     setupGPT();
     try{$("strict-ml").checked=localStorage.getItem("strictML")==="true";}catch{}
     text("forex-status",state.session.forex_ready?"Ключ настроен · доступ проверяется при запросе":"Ожидает API-ключ");$("forex-status").classList.toggle("ready",state.session.forex_ready);

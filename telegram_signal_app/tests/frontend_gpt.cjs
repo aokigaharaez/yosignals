@@ -49,4 +49,11 @@ node('entry-mode').value='auto';node('gpt-model').value='gpt-6-luna';
   assert.match(node('probability-detail').textContent,/EUR\/USD/);
   assert.match(node('validation-detail').textContent,/EUR\/USD/);
   console.log('EUR/USD probability is explicitly labeled with pair, expiry and source');
+  node('strict-ml').checked=false;
+  context.fetch=async()=>({ok:false,status:503,headers:{get(){return 'application/json'}},
+    json:async()=>({code:'model_training',detail:'Обучение в фоне'})});
+  await context.harness.requestAnalysis();
+  assert.equal(state.analysisError,null);
+  assert.equal(node('signal-action').textContent,'ОБУЧЕНИЕ ML В ФОНЕ');
+  console.log('Background ML training is shown as progress rather than an error');
 })().catch(error=>{console.error(error);process.exitCode=1});

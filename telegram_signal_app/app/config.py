@@ -27,13 +27,14 @@ class Settings:
     forex_max_data_age_seconds: int = 180
     model_min_score: float = .60
     model_min_validation: float = .54
-    model_target_win_rate: float = .80
-    model_min_calibration_samples: int = 100
-    model_min_test_signals: int = 50
+    model_target_win_rate: float = .70
+    model_min_calibration_samples: int = 150
+    model_min_test_signals: int = 100
     model_retrain_seconds: int = 600
     model_history_limit: int = 20000
     crypto_backfill_candles: int = 10000
     forex_history_candles: int = 5000
+    forex_backfill_candles: int = 20000
     auth_max_age_seconds: int = 3600
 
     @property
@@ -88,6 +89,8 @@ def load_settings() -> Settings:
         raise ValueError("Invalid crypto backfill limit")
     if not 1500 <= settings.forex_history_candles <= min(5000, settings.model_history_limit):
         raise ValueError("FOREX_HISTORY_CANDLES must be between 1500 and min(5000, MODEL_HISTORY_LIMIT)")
+    if not settings.forex_history_candles <= settings.forex_backfill_candles <= settings.model_history_limit:
+        raise ValueError("Invalid forex backfill depth")
     if not 1 <= settings.market_cache_seconds <= 120 or not 30 <= settings.max_data_age_seconds <= 180:
         raise ValueError("Invalid market freshness settings")
     if not 60 <= settings.forex_max_data_age_seconds <= 300:

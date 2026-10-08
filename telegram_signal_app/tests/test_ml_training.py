@@ -19,7 +19,7 @@ def test_strong_signals_require_untouched_test_success_not_raw_confidence():
     cal_wins = np.ones(200, dtype=bool)
     bad = selective_validation(scores, cal_wins, scores, np.zeros(200, dtype=bool), settings)
     good = selective_validation(scores, cal_wins, scores, cal_wins, settings)
-    assert bad["threshold"] == good["threshold"] == .55
+    assert bad["threshold"] == good["threshold"] == .50
     assert not bad["passed"] and good["passed"]
     assert bad["accuracy"] == 0 and good["accuracy"] == 100
     scarce = selective_validation(scores[:10], cal_wins[:10], scores, cal_wins, settings)

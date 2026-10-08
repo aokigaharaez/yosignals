@@ -100,6 +100,7 @@ def create_app(settings: Settings) -> FastAPI:
             finally:
                 for task in tasks:
                     task.cancel()
+                await service.close()
                 await market.close()
                 for task in tasks:
                     with suppress(asyncio.CancelledError):
@@ -171,7 +172,7 @@ def create_app(settings: Settings) -> FastAPI:
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "version": "4.1", "delivery": "miniapp"}
+        return {"status": "ok", "version": "5.0", "delivery": "miniapp"}
 
     @app.get("/api/session")
     async def session(request: Request):
@@ -181,8 +182,9 @@ def create_app(settings: Settings) -> FastAPI:
                 "server_time": int(time.time()), "bot_ready": app.state.bot_ready,
                 "bot_status": app.state.bot_status, "model_status": app.state.service.model_status,
                 "forex_ready": bool(settings.twelve_data_api_key), "webapp_ready": bool(settings.webapp_url),
+                "model_target_win_rate": settings.model_target_win_rate*100,
                 "model_retrain_seconds": settings.model_retrain_seconds, "min_score": settings.model_min_score * 100, "max_data_age_seconds": settings.max_data_age_seconds,
-                "delivery": "miniapp", "version": "4.1",
+                "delivery": "miniapp", "version": "5.0",
                 "gpt_ready": bool(settings.openai_api_key),
                 "gpt_models": [{"id": k, "label": v} for k, v in MODELS.items()],
                 "instruments": [asdict(i) for i in INSTRUMENTS.values()], "expiries": EXPIRIES}

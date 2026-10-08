@@ -1,0 +1,275 @@
+{
+  "symbol": "EURUSD",
+  "provider": "Twelve Data",
+  "history_candles": 22000,
+  "excluded_recent_candles": 8000,
+  "protocol": "fixed_60_20_20_three_inner_folds_72_calibration_policies_single_final_test",
+  "reports": [
+    {
+      "expiry": 1,
+      "model": "Adaptive ML · v4 · boosting",
+      "probability": {
+        "value": 49.1,
+        "method": "historical_bin",
+        "samples": 1068,
+        "wins": 524,
+        "interval": [
+          46.1,
+          52.1
+        ],
+        "note": "Калибровка по 1068 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+      },
+      "validation": {
+        "samples": 2188,
+        "training_samples": 11492,
+        "calibration_samples": 2187,
+        "accuracy": 53.2,
+        "baseline": 53.5,
+        "selected_samples": 831,
+        "selected_accuracy": 59.8,
+        "brier_score": 0.2472,
+        "model_selection": {
+          "selected": "boosting",
+          "folds": 3,
+          "log_loss": {
+            "legacy_linear": 0.6666,
+            "expanded_linear": 0.6603,
+            "regularized_linear": 0.6568,
+            "boosting": 0.6153,
+            "extra_trees": 0.6155,
+            "ensemble": 0.619,
+            "strong_linear": 0.6495,
+            "shallow_boosting": 0.6285,
+            "deep_boosting": 0.6128,
+            "shallow_trees": 0.6285
+          },
+          "method": "purged_expanding_training_only"
+        },
+        "feature_count": 40,
+        "selective": {
+          "target": 70.0,
+          "threshold": 0.65,
+          "regime": "all",
+          "calibration_samples": 745,
+          "calibration_wins": 528,
+          "calibration_accuracy": 70.9,
+          "policies_considered": 72,
+          "samples": 418,
+          "wins": 259,
+          "accuracy": 62.0,
+          "interval": [
+            57.2,
+            66.5
+          ],
+          "coverage": 19.1,
+          "recent_accuracy": 59.3,
+          "passed": false,
+          "method": "calibration_threshold_untouched_test"
+        },
+        "training_cutoff": 1790447340,
+        "evaluated_until": 1790972520,
+        "method": "train_calibration_test_purged_nonoverlapping"
+      },
+      "signal_eligible": false,
+      "seconds": 41.72
+    },
+    {
+      "expiry": 3,
+      "model": "Adaptive ML · v4 · boosting",
+      "probability": {
+        "value": 47.6,
+        "method": "historical_bin",
+        "samples": 838,
+        "wins": 399,
+        "interval": [
+          44.3,
+          51.0
+        ],
+        "note": "Калибровка по 838 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+      },
+      "validation": {
+        "samples": 1094,
+        "training_samples": 12027,
+        "calibration_samples": 1093,
+        "accuracy": 52.3,
+        "baseline": 49.7,
+        "selected_samples": 83,
+        "selected_accuracy": 47.0,
+        "brier_score": 0.2542,
+        "model_selection": {
+          "selected": "boosting",
+          "folds": 3,
+          "log_loss": {
+            "legacy_linear": 0.7032,
+            "expanded_linear": 0.6946,
+            "regularized_linear": 0.6903,
+            "boosting": 0.6476,
+            "extra_trees": 0.6552,
+            "ensemble": 0.6537,
+            "strong_linear": 0.6808,
+            "shallow_boosting": 0.6668,
+            "deep_boosting": 0.6432,
+            "shallow_trees": 0.6687
+          },
+          "method": "purged_expanding_training_only"
+        },
+        "feature_count": 40,
+        "selective": {
+          "target": 70.0,
+          "threshold": 0.65,
+          "regime": "all",
+          "calibration_samples": 172,
+          "calibration_wins": 127,
+          "calibration_accuracy": 73.8,
+          "policies_considered": 72,
+          "samples": 34,
+          "wins": 10,
+          "accuracy": 29.4,
+          "interval": [
+            16.8,
+            46.2
+          ],
+          "coverage": 3.1,
+          "recent_accuracy": 23.5,
+          "passed": false,
+          "method": "calibration_threshold_untouched_test"
+        },
+        "training_cutoff": 1790447280,
+        "evaluated_until": 1790972400,
+        "method": "train_calibration_test_purged_nonoverlapping"
+      },
+      "signal_eligible": false,
+      "seconds": 49.97
+    },
+    {
+      "expiry": 5,
+      "model": "Adaptive ML · v4 · boosting",
+      "probability": {
+        "value": 47.5,
+        "method": "historical_bin",
+        "samples": 548,
+        "wins": 260,
+        "interval": [
+          43.3,
+          51.6
+        ],
+        "note": "Калибровка по 548 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+      },
+      "validation": {
+        "samples": 730,
+        "training_samples": 12094,
+        "calibration_samples": 729,
+        "accuracy": 48.8,
+        "baseline": 50.4,
+        "selected_samples": 56,
+        "selected_accuracy": 51.8,
+        "brier_score": 0.2506,
+        "model_selection": {
+          "selected": "boosting",
+          "folds": 3,
+          "log_loss": {
+            "legacy_linear": 0.6949,
+            "expanded_linear": 0.6858,
+            "regularized_linear": 0.6827,
+            "boosting": 0.6443,
+            "extra_trees": 0.6527,
+            "ensemble": 0.65,
+            "strong_linear": 0.6774,
+            "shallow_boosting": 0.6583,
+            "deep_boosting": 0.6459,
+            "shallow_trees": 0.6655
+          },
+          "method": "purged_expanding_training_only"
+        },
+        "feature_count": 40,
+        "selective": {
+          "target": 70.0,
+          "threshold": null,
+          "regime": "all",
+          "calibration_samples": 0,
+          "calibration_wins": 0,
+          "calibration_accuracy": null,
+          "policies_considered": 72,
+          "samples": 0,
+          "wins": 0,
+          "accuracy": null,
+          "interval": null,
+          "coverage": 0.0,
+          "recent_accuracy": null,
+          "passed": false,
+          "method": "calibration_threshold_untouched_test"
+        },
+        "training_cutoff": 1790447220,
+        "evaluated_until": 1790972580,
+        "method": "train_calibration_test_purged_nonoverlapping"
+      },
+      "signal_eligible": false,
+      "seconds": 47.71
+    },
+    {
+      "expiry": 15,
+      "model": "Adaptive ML · v4 · extra_trees",
+      "probability": {
+        "value": 50.0,
+        "method": "historical_bin",
+        "samples": 228,
+        "wins": 114,
+        "interval": [
+          43.6,
+          56.4
+        ],
+        "note": "Калибровка по 228 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+      },
+      "validation": {
+        "samples": 274,
+        "training_samples": 12236,
+        "calibration_samples": 273,
+        "accuracy": 47.4,
+        "baseline": 47.8,
+        "selected_samples": 22,
+        "selected_accuracy": 59.1,
+        "brier_score": 0.2488,
+        "model_selection": {
+          "selected": "extra_trees",
+          "folds": 3,
+          "log_loss": {
+            "legacy_linear": 0.7177,
+            "expanded_linear": 0.7112,
+            "regularized_linear": 0.7043,
+            "boosting": 0.6739,
+            "extra_trees": 0.6681,
+            "ensemble": 0.6726,
+            "strong_linear": 0.6925,
+            "shallow_boosting": 0.6837,
+            "deep_boosting": 0.6912,
+            "shallow_trees": 0.6769
+          },
+          "method": "purged_expanding_training_only"
+        },
+        "feature_count": 40,
+        "selective": {
+          "target": 70.0,
+          "threshold": null,
+          "regime": "all",
+          "calibration_samples": 0,
+          "calibration_wins": 0,
+          "calibration_accuracy": null,
+          "policies_considered": 72,
+          "samples": 0,
+          "wins": 0,
+          "accuracy": null,
+          "interval": null,
+          "coverage": 0.0,
+          "recent_accuracy": null,
+          "passed": false,
+          "method": "calibration_threshold_untouched_test"
+        },
+        "training_cutoff": 1790446800,
+        "evaluated_until": 1790972340,
+        "method": "train_calibration_test_purged_nonoverlapping"
+      },
+      "signal_eligible": false,
+      "seconds": 49.61
+    }
+  ]
+}

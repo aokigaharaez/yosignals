@@ -87,7 +87,7 @@ def test_model_abstains_without_history_and_is_finite():
     assert analyze(candles(200), 3, Settings())["direction"] == "WAIT"
     run = analyze(candles(), 3, Settings())
     assert run["model_ready"]
-    assert 50 <= run["score"] <= 100
+    assert 0 <= run["score"] <= 100
     assert run["validation"]["samples"] > 20
     json.dumps(run, allow_nan=False)
 

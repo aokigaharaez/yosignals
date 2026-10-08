@@ -51,7 +51,9 @@ class MarketData:
                 await self.history.store_candles(symbol, rows, self.settings.model_history_limit)
                 rows = self.validate(await self.history.candle_history(symbol, self.settings.model_history_limit))
                 self.cache[symbol] = (time.monotonic(), rows)
-                if (INSTRUMENTS[symbol].category == "crypto" and len(rows) < self.settings.crypto_backfill_candles
+                target = (self.settings.forex_backfill_candles if symbol == "EURUSD" else
+                          self.settings.crypto_backfill_candles if INSTRUMENTS[symbol].category == "crypto" else 0)
+                if (len(rows) < target
                         and time.monotonic()-self.backfill_attempts.get(symbol, -10000) > 600
                         and (symbol not in self.backfills or self.backfills[symbol].done())):
                     self.backfill_attempts[symbol] = time.monotonic()
@@ -61,14 +63,19 @@ class MarketData:
             return rows
 
     async def _backfill(self, symbol, oldest, count):
-        """Bootstrap crypto history without delaying the first live quote."""
+        """Bootstrap real history without delaying the first live quote."""
         try:
-            while count < self.settings.crypto_backfill_candles:
-                response = await self.client.get("https://data-api.binance.vision/api/v3/klines", params={
-                    "symbol": INSTRUMENTS[symbol].provider_symbol, "interval": "1m",
-                    "limit": min(1000, self.settings.crypto_backfill_candles-count), "endTime": oldest*1000-1})
-                self._check_http(response)
-                rows = self.validate([Candle(int(r[0])//1000, *map(float, r[1:5])) for r in response.json()])
+            forex = INSTRUMENTS[symbol].category == "forex"
+            target = self.settings.forex_backfill_candles if forex else self.settings.crypto_backfill_candles
+            while count < target:
+                if forex:
+                    rows = self.validate(await self._fetch(symbol, end_at=oldest-60, outputsize=min(5000, target-count)))
+                else:
+                    response = await self.client.get("https://data-api.binance.vision/api/v3/klines", params={
+                        "symbol": INSTRUMENTS[symbol].provider_symbol, "interval": "1m",
+                        "limit": min(1000, target-count), "endTime": oldest*1000-1})
+                    self._check_http(response)
+                    rows = self.validate([Candle(int(r[0])//1000, *map(float, r[1:5])) for r in response.json()])
                 if rows[-1].time >= oldest:
                     raise MarketError("invalid_data", "Источник вернул неверный участок истории.")
                 await self.history.store_candles(symbol, rows, self.settings.model_history_limit)
@@ -83,7 +90,7 @@ class MarketData:
             task.cancel()
         await asyncio.gather(*self.backfills.values(), return_exceptions=True)
 
-    async def _fetch(self, symbol: str) -> list[Candle]:
+    async def _fetch(self, symbol: str, end_at: int | None = None, outputsize: int | None = None) -> list[Candle]:
         instrument = INSTRUMENTS[symbol]
         try:
             if instrument.category == "crypto":
@@ -103,8 +110,9 @@ class MarketData:
             if not self.settings.twelve_data_api_key:
                 raise MarketError("missing_key", "Для валютных пар добавьте TWELVE_DATA_API_KEY в Railway Variables (локально — в .env) и перезапустите приложение.")
             response = await self.client.get("https://api.twelvedata.com/time_series", params={
-                "symbol": instrument.provider_symbol, "interval": "1min", "outputsize": self.settings.forex_history_candles,
+                "symbol": instrument.provider_symbol, "interval": "1min", "outputsize": outputsize or self.settings.forex_history_candles,
                 "timezone": "UTC", "order": "ASC", "apikey": self.settings.twelve_data_api_key,
+                **({"end_date":datetime.fromtimestamp(end_at,timezone.utc).strftime("%Y-%m-%d %H:%M:%S")} if end_at is not None else {}),
             })
             self._check_http(response)
             payload = response.json()

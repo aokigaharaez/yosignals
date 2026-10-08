@@ -23,6 +23,8 @@ class SignalService:
         self.analyzer = None
         self.trainer_factory = None
         self.trainers = {}
+        self.training_tasks = {}
+        self.training_slots = asyncio.Semaphore(1)
         self.model_status = "loading"
 
     async def prepare_model(self):
@@ -46,7 +48,7 @@ class SignalService:
         freshness_limit = (self.settings.forex_max_data_age_seconds if INSTRUMENTS[symbol].category == "forex"
                            else self.settings.max_data_age_seconds)
         result = {"direction": "WAIT", "score": None, "probability": None, "quality": "unavailable",
-                  "model": "Adaptive ML · v4", "validation": None, "indicators": {},
+                  "model": "Adaptive ML · v5", "validation": None, "indicators": {},
                   "reasons": ["Модель загружается. Анализ появится после подготовки библиотек."
                               if self.model_status == "loading" else "Библиотеки модели недоступны. Проверьте зависимости сервера."],
                   "model_ready": False}
@@ -70,9 +72,25 @@ class SignalService:
                             self.trainers[key] = self.trainer_factory()
                             if len(self.trainers) > 32:
                                 self.trainers.pop(next(iter(self.trainers)))
+                            for obsolete, task in list(self.training_tasks.items()):
+                                if task.done() and obsolete not in self.trainers:
+                                    self.training_tasks.pop(obsolete)
                         analyzer = self.trainers[key]
-                    result = await asyncio.to_thread(analyzer, candles, expiry, self.settings, entry_delay=lead)
-                    self.cache[key] = (last.time, copy.deepcopy(result))
+                    if self.trainer_factory:
+                        trainer = self.trainers[key]
+                        pending = self.training_tasks.get(key)
+                        if (trainer.needs_training(candles, self.settings) and (pending is None or pending.done())
+                                and sum(not t.done() for t in self.training_tasks.values()) < 2):
+                            self.training_tasks[key] = asyncio.create_task(self._train(key, trainer, candles, expiry, lead))
+                        prediction = await asyncio.to_thread(trainer.predict, candles, self.settings)
+                        if prediction is not None:
+                            result = prediction
+                        else:
+                            result.update(training_pending=True, indicators=indicators(candles), reasons=["Модель обучается на истории этой пары в фоне. Котировки доступны; прогноз появится после независимой проверки."])
+                    else:
+                        result = await asyncio.to_thread(analyzer, candles, expiry, self.settings, entry_delay=lead)
+                    if not result.get("training_pending"):
+                        self.cache[key] = (last.time, copy.deepcopy(result))
                     if len(self.cache) > 256:
                         self.cache.pop(next(iter(self.cache)))
                 if entry - int(time.time()) >= 10:
@@ -95,12 +113,29 @@ class SignalService:
                       data_as_of=last.time + 60, data_age_seconds=age, fresh=fresh, price=last.close,
                       max_data_age_seconds=freshness_limit, delayed=age > 90,
                       entry_at=entry, entry_delay=lead, close_at=entry + expiry * 60, server_time=now,
-                      status="scheduled" if result["direction"] != "WAIT" else ("loading" if fresh and self.model_status == "loading" else "unavailable"),
+                      status="scheduled" if result["direction"] != "WAIT" else ("loading" if fresh and (self.model_status == "loading" or result.get("training_pending")) else "unavailable"),
                       change_percent=round((last.close / candles[max(0, len(candles)-61)].close - 1) * 100, 3),
                       candles=[c.to_dict() for c in candles[-120:]], sample_count=len(candles),
                       price_note="Внешние котировки. Сверьте актив и цену в Pocket Option; OTC не поддерживается.",
                       score_note="Оценка успеха направления на внешнем рынке. Вероятность выигрыша в Pocket Option не проверена.")
         return result
+
+    async def _train(self, key, trainer, candles, expiry, lead):
+        try:
+            async with self.training_slots:
+                result = await asyncio.to_thread(trainer, candles, expiry, self.settings, entry_delay=lead)
+                self.cache[key] = (candles[-1].time, copy.deepcopy(result))
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logging.getLogger(__name__).exception("ML training failed for %s", key)
+            self.cache[key] = (candles[-1].time, {"direction":"WAIT", "probability":None,
+                "quality":"unavailable", "model_ready":False, "reasons":["Обучение не завершилось. Проверьте логи сервера; следующая попытка после обновления свечей."]})
+
+    async def close(self):
+        for task in self.training_tasks.values():
+            task.cancel()
+        await asyncio.gather(*self.training_tasks.values(), return_exceptions=True)
 
     async def create_gpt(self, symbol, expiry, model, user_id, gpt, entry_at=None):
         validate_entry(entry_at, now=int(time.time()))
@@ -137,6 +172,8 @@ class SignalService:
             raise MarketError("stale_data", result["reasons"][0])
         if self.model_status != "ready":
             raise MarketError("model_loading" if self.model_status == "loading" else "model_error", result["reasons"][0])
+        if result.get("training_pending"):
+            raise MarketError("model_training", result["reasons"][0])
         if strict and not result.get("signal_eligible", False):
             result.update(raw_direction=result["direction"], direction="WAIT", status="filtered",
                           reasons=[f"Нет сигнала, подтвердившего целевой результат {self.settings.model_target_win_rate:.0%} на независимой истории. Направление осталось предварительным.", *result["reasons"]])
