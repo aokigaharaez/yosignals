@@ -184,4 +184,3 @@ def test_consensus_api_forwards_strict_and_protects_performance(tmp_path):
                                                  'model':'gpt-consensus','strict':True})
         assert response.status_code==200 and calls==[('gpt-consensus',True,42)]
         assert client.get('/api/performance').json()['groups']==[]
-
