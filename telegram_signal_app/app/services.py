@@ -21,12 +21,15 @@ class SignalService:
         self.cache: dict[tuple[str, int, int], tuple[int, dict]] = {}
         self.lock = asyncio.Lock()
         self.analyzer = None
+        self.trainer_factory = None
+        self.trainers = {}
         self.model_status = "loading"
 
     async def prepare_model(self):
         try:
             module = await asyncio.to_thread(importlib.import_module, "app.analysis")
             self.analyzer = module.analyze
+            self.trainer_factory = module.MLTrainer
             self.model_status = "ready"
             logging.getLogger(__name__).info("ML model libraries ready")
         except Exception:
@@ -43,7 +46,7 @@ class SignalService:
         freshness_limit = (self.settings.forex_max_data_age_seconds if INSTRUMENTS[symbol].category == "forex"
                            else self.settings.max_data_age_seconds)
         result = {"direction": "WAIT", "score": None, "probability": None, "quality": "unavailable",
-                  "model": "Adaptive ML · v3", "validation": None, "indicators": {},
+                  "model": "Adaptive ML · v4", "validation": None, "indicators": {},
                   "reasons": ["Модель загружается. Анализ появится после подготовки библиотек."
                               if self.model_status == "loading" else "Библиотеки модели недоступны. Проверьте зависимости сервера."],
                   "model_ready": False}
@@ -61,7 +64,14 @@ class SignalService:
                 if cached and cached[0] == last.time:
                     result = copy.deepcopy(cached[1])
                 else:
-                    result = await asyncio.to_thread(self.analyzer, candles, expiry, self.settings, entry_delay=lead)
+                    analyzer = self.analyzer
+                    if self.trainer_factory:
+                        if key not in self.trainers:
+                            self.trainers[key] = self.trainer_factory()
+                            if len(self.trainers) > 32:
+                                self.trainers.pop(next(iter(self.trainers)))
+                        analyzer = self.trainers[key]
+                    result = await asyncio.to_thread(analyzer, candles, expiry, self.settings, entry_delay=lead)
                     self.cache[key] = (last.time, copy.deepcopy(result))
                     if len(self.cache) > 256:
                         self.cache.pop(next(iter(self.cache)))
@@ -116,12 +126,15 @@ class SignalService:
         saved = await self.db.save({k: v for k, v in snapshot.items() if k != "candles"})
         return {**saved, "candles": snapshot["candles"], "server_time": now}
 
-    async def create(self, symbol: str, expiry: int, entry_at: int | None = None) -> dict:
+    async def create(self, symbol: str, expiry: int, entry_at: int | None = None, strict: bool = False) -> dict:
         result = await self.snapshot(symbol, expiry, **({"entry_at": entry_at} if entry_at is not None else {}))
         if not result["fresh"]:
             raise MarketError("stale_data", result["reasons"][0])
         if self.model_status != "ready":
             raise MarketError("model_loading" if self.model_status == "loading" else "model_error", result["reasons"][0])
+        if strict and not result.get("signal_eligible", False):
+            result.update(raw_direction=result["direction"], direction="WAIT", status="filtered",
+                          reasons=[f"Нет сигнала, подтвердившего целевой результат {self.settings.model_target_win_rate:.0%} на независимой истории. Направление осталось предварительным.", *result["reasons"]])
         # Do not retain 120 chart candles in every journal entry.
         saved = await self.db.save({k: v for k, v in result.items() if k != "candles"})
         return {**saved, "candles": result["candles"], "server_time": int(time.time())}

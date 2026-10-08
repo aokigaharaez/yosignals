@@ -111,9 +111,10 @@ async function loadMarket(reset=false) {
   } finally { if(seq===state.marketSequence){state.loading=false;$("refresh-button").disabled=false;} }
 }
 function renderSnapshot() {
-  const d=state.snapshot;if(!d)return;
+  let d=state.snapshot;if(!d)return;
+  if(state.engine==="ml"&&$("strict-ml").checked&&!d.signal_eligible){d={...d,raw_direction:d.raw_direction||d.direction,direction:"WAIT",status:"filtered"};}
   $("chart-empty").hidden=true;
-  text("signal-updated",`${d.engine==="gpt"?d.model:({legacy_linear:"ML · линейная",expanded_linear:"ML · расширенная",boosting:"ML · бустинг"}[d.validation?.model_selection?.selected]||"ML Model")} · анализ ${clockTime(d.forecast_at||d.server_time)} · вход ${clockTime(d.entry_at)} · экспирация ${d.expiry} мин`);
+  text("signal-updated",`${d.engine==="gpt"?d.model:({legacy_linear:"ML · линейная",expanded_linear:"ML · расширенная",boosting:"ML · бустинг",extra_trees:"ML · деревья",regularized_linear:"ML · регуляризация",ensemble:"ML · ансамбль"}[d.validation?.model_selection?.selected]||"ML Model")} · анализ ${clockTime(d.forecast_at||d.server_time)} · вход ${clockTime(d.entry_at)} · экспирация ${d.expiry} мин`);
   text("asset-price",price(d.price));text("asset-change",`${d.change_percent>=0?"+":""}${d.change_percent.toFixed(3)}% за 60 мин`);
   $("asset-change").className=d.change_percent>=0?"positive":"negative";
   text("data-metric",!d.fresh?"Устарели":d.delayed?"Задержка источника":"Актуальны");text("data-detail",`${d.sample_count} свечей · возраст ${Math.round(now()-d.data_as_of)} сек · ${clockTime(d.data_as_of)}`);
@@ -121,13 +122,16 @@ function renderSnapshot() {
   text("probability-detail",d.probability?(d.probability.method==="historical_bin"?`${d.probability.samples} похожих прогнозов`:"Предварительная оценка · без калибровки"):"Недостаточно данных для оценки");
   text("validation-metric",d.validation?`${d.validation.accuracy}%`:"—");
   text("validation-detail",d.validation?`${d.validation.samples} примеров · база ${d.validation.baseline}%`:"Недостаточно истории");
+  text("ml-training-status",d.training?`Обучение: ${d.training.history_candles} свечей · ${d.validation?.feature_count||0} признаков · обновление модели раз в ${Math.round((state.session?.model_retrain_seconds||600)/60)} мин`:"Ожидаем обучение модели");
+  const selective=d.validation?.selective;
+  text("ml-selective-status",selective?`Строгая проверка: ${selective.accuracy==null?"нет подходящих сигналов":`${selective.accuracy}% успеха`} · ${selective.samples} примеров · отобрано ${selective.coverage}% · ${selective.passed?"проверка пройдена":"цель не подтверждена"}`:"Для строгой проверки пока нет данных");
   const labels={WAIT:"—",CALL:"CALL",PUT:"PUT"};
   const waiting=d.engine==="gpt"&&d.forecast_pending&&d.fresh;
-  text("signal-action",{CALL:"ВВЕРХ ↑",PUT:"ВНИЗ ↓",WAIT:state.analysisError?(state.engine==="gpt"?"ОШИБКА GPT":"ОШИБКА ML"):d.forecast_state==="stale_data"?"ДАННЫЕ УСТАРЕЛИ":d.forecast_state==="expired_entry"?"ВРЕМЯ ВХОДА ПРОШЛО":waiting?(state.analyzing?"ПОЛУЧАЕМ ПРОГНОЗ GPT":state.session?.gpt_ready?"ЗАПРОСИТЕ GPT-ПРОГНОЗ":"НУЖЕН OPENAI API-КЛЮЧ"):d.status==="loading"?"Подготовка модели":"НЕТ НАПРАВЛЕНИЯ"}[d.direction]);
+  text("signal-action",{CALL:"ВВЕРХ ↑",PUT:"ВНИЗ ↓",WAIT:d.status==="filtered"?"НЕТ ПОДТВЕРЖДЁННОГО СИГНАЛА":state.analysisError?(state.engine==="gpt"?"ОШИБКА GPT":"ОШИБКА ML"):d.forecast_state==="stale_data"?"ДАННЫЕ УСТАРЕЛИ":d.forecast_state==="expired_entry"?"ВРЕМЯ ВХОДА ПРОШЛО":waiting?(state.analyzing?"ПОЛУЧАЕМ ПРОГНОЗ GPT":state.session?.gpt_ready?"ЗАПРОСИТЕ GPT-ПРОГНОЗ":"НУЖЕН OPENAI API-КЛЮЧ"):d.status==="loading"?"Подготовка модели":"НЕТ НАПРАВЛЕНИЯ"}[d.direction]);
   text("signal-direction",labels[d.direction]);text("signal-symbol",{WAIT:"∿",CALL:"↗",PUT:"↘"}[d.direction]);
   $("signal-state").className=`signal-state ${d.direction.toLowerCase()}`;
-  text("signal-summary",state.analysisError||d.reasons.join(" "));$("signal-explanation").open=d.direction==="WAIT"&&(!waiting||!!state.analysisError);
-  $("forecast-quality").hidden=d.direction==="WAIT";
+  text("signal-summary",state.analysisError||(d.status==="filtered"?`Предварительное направление: ${d.raw_direction||"—"}. Целевая точность на независимой истории не подтверждена для этого прогноза. `:"")+d.reasons.join(" "));$("signal-explanation").open=d.direction==="WAIT"&&(!waiting||!!state.analysisError);
+  $("forecast-quality").hidden=d.direction==="WAIT"&&d.status!=="filtered";
   text("quality-badge",d.engine==="gpt"?"GPT · точность не проверена":d.quality==="qualified"?"Фильтры качества пройдены":"Слабый сигнал · высокий риск");
   $("quality-badge").className=`quality-badge ${d.quality||"weak"}`;
   text("chance-value",chance(d));text("chance-note",d.probability?.note||(d.engine==="gpt"?"Для GPT вероятность выигрыша не откалибрована.":"Оценка недоступна"));
@@ -179,12 +183,18 @@ async function requestAnalysis(auto=false){
   const seq=++state.sequence;
   button.querySelector("span").textContent="Анализируем рынок…";
   try {
-    const run=state.session.preview?await api(`/api/market?symbol=${encodeURIComponent(symbol)}&expiry=${expiry}${entry?`&entry_at=${entry}`:""}`):await api("/api/analyses",{method:"POST",body:JSON.stringify({symbol,expiry,entry_at:entry,engine:state.engine,model:$("gpt-model").value||"gpt-6-luna"})});
+    const run=state.session.preview?await api(`/api/market?symbol=${encodeURIComponent(symbol)}&expiry=${expiry}${entry?`&entry_at=${entry}`:""}`):await api("/api/analyses",{method:"POST",body:JSON.stringify({symbol,expiry,entry_at:entry,engine:state.engine,strict:state.engine==="ml"&&$("strict-ml").checked,model:$("gpt-model").value||"gpt-6-luna"})});
     if(seq===state.sequence){state.snapshot=run;state.snapshot.forecast_at=run.server_time;state.analysisError=null;state.snapshot.forecast_data_as_of=run.data_as_of;state.snapshot.selection_entry_at=entry;state.offset=run.server_time-Date.now()/1000;renderSnapshot();}
     if(state.session.preview)toast("Прогноз готов. Для сохранения и автоанализа откройте Mini App в Telegram.");
     else {state.seenId=Math.max(state.seenId,run.id);toast(`Анализ #${run.id} · ${run.label}: ${run.direction==="WAIT"?"нет прогноза":run.direction}.`);await loadHistory();}
   }catch(error){state.analysisError=error.message;if(!auto)toast(error.message);text("signal-updated",`Обновление анализа не удалось: ${error.message}`);if(!state.snapshot||state.snapshot.direction==="WAIT"){text("signal-direction","—");text("signal-action",state.engine==="gpt"?"ОШИБКА GPT":"ОШИБКА ML");text("signal-summary",error.message);$("signal-explanation").open=true;}}finally{button.disabled=false;state.analyzing=false;$("analysis-progress").hidden=true;button.querySelector("span").textContent="Получить сигнал";}
 }
+$("strict-ml").addEventListener("change",async()=>{
+  if(state.snapshot)renderSnapshot();
+  if(state.historyLoaded)renderFeed();
+  try{localStorage.setItem("strictML",String($("strict-ml").checked));}catch{}
+  if(state.watch?.enabled){try{state.watch=await api("/api/watch",{method:"PUT",body:JSON.stringify({enabled:true,symbol:state.watch.symbol,expiry:state.watch.expiry,strict:$("strict-ml").checked})});renderWatch();}catch(error){toast(error.message);}}
+});
 $("analyze-button").addEventListener("click",()=>requestAnalysis());
 function renderWatch() {
   $("watch-toggle").setAttribute("aria-checked",String(!!state.watch?.enabled));
@@ -196,7 +206,7 @@ $("watch-toggle").addEventListener("click",async()=>{
   if(state.engine==="gpt"){toast("Автоанализ работает на ML Model. GPT запускается кнопкой «Получить сигнал».");return;}
   if(state.session.preview){toast("Автоанализ включается внутри Telegram. Откройте раздел «Подключения».");return;}
   const button=$("watch-toggle");button.disabled=true;
-  try { state.watch=await api("/api/watch",{method:"PUT",body:JSON.stringify({enabled:!state.watch?.enabled,symbol:state.symbol,expiry:state.expiry})});renderWatch();toast(state.watch.enabled?"Автоанализ включён. Сигналы появятся в ленте Mini App.":"Автоанализ остановлен."); }
+  try { state.watch=await api("/api/watch",{method:"PUT",body:JSON.stringify({enabled:!state.watch?.enabled,symbol:state.symbol,expiry:state.expiry,strict:$("strict-ml").checked})});renderWatch();toast(state.watch.enabled?"Автоанализ включён. Сигналы появятся в ленте Mini App.":"Автоанализ остановлен."); }
   catch(error){toast(error.message);}finally{button.disabled=false;}
 });
 function node(tag,className,value){const e=document.createElement(tag);if(className)e.className=className;if(value!=null)e.textContent=value;return e;}
@@ -222,7 +232,8 @@ function resultButtons(run) {
   return buttons;
 }
 function renderFeed() {
-  $("recent-list").replaceChildren(...state.history.slice(0,6).map(r=>{
+  const visible=state.history.filter(r=>!$("strict-ml").checked||r.engine==="gpt"||r.signal_eligible||r.direction==="WAIT");
+  $("recent-list").replaceChildren(...visible.slice(0,6).map(r=>{
     const e=node("article",`signal-feed-card ${r.quality||""}`),head=node("div","signal-feed-title");
     head.append(node("strong","",r.label),node("span",`direction-pill ${r.direction.toLowerCase()}`,r.direction==="WAIT"?"Нет прогноза":r.direction));
     if(r.direction!=="WAIT")head.append(node("span",`quality-badge ${r.quality||""}`,r.engine==="gpt"?r.model:r.quality==="qualified"?"Фильтры пройдены":"Слабый"));
@@ -232,7 +243,7 @@ function renderFeed() {
     if(!r.result && r.direction!=="WAIT" && now()>=r.close_at)e.append(resultButtons(r));
     return e;
   }));
-  if(!state.history.length)$("recent-list").append(node("div","empty-inline","Нажмите «Получить сигнал». Результат появится здесь; чат бота останется свободным от сигналов."));
+  if(!visible.length)$("recent-list").append(node("div","empty-inline",$("strict-ml").checked?"Сигналов, прошедших строгую проверку, пока нет. Все анализы сохранены в истории.":"Нажмите «Получить сигнал». Результат появится здесь; чат бота останется свободным от сигналов."));
 }
 async function loadHistory() {
   if(!state.session || state.session.preview){const message="Лента сигналов и история доступны внутри Telegram Mini App. Анализ рынка можно посмотреть здесь.";$("recent-list").replaceChildren(node("div","empty-inline",message));$("history-list").replaceChildren(node("div","empty-inline",message));return;}
@@ -241,7 +252,7 @@ async function loadHistory() {
   try {
     const data=await api("/api/history");const s=data.stats;
     state.offset=data.server_time-Date.now()/1000;
-    const fresh=data.items.filter(r=>r.id>state.seenId && r.direction!=="WAIT");
+    const fresh=data.items.filter(r=>r.id>state.seenId && r.direction!=="WAIT" && (!$("strict-ml").checked||r.engine==="gpt"||r.signal_eligible));
     if(state.historyLoaded && fresh.length){const r=fresh[0];toast(`Новый сигнал в Mini App: ${r.label} ${r.direction} · шанс по модели ${chance(r)}${r.quality==="weak"?" · слабый сигнал":""}.`);tg?.HapticFeedback?.notificationOccurred?.("success");}
     state.seenId=Math.max(state.seenId,...data.items.map(r=>r.id));state.historyLoaded=true;state.history=data.items;
     renderFeed();
@@ -307,7 +318,7 @@ function tick(){
   text("clock",`${clockTime(now())} · ${state.session?.timezone||"UTC+3"}`);
   for(const r of state.history){
     document.querySelectorAll(`[data-run-clock="${r.id}"]`).forEach(el=>{el.textContent=phase(r);el.classList.toggle("live",!r.result&&r.entry_at<=now()&&r.close_at>now());});
-    if(document.hidden || r.result || r.direction==="WAIT")continue;
+    if(document.hidden || r.result || r.direction==="WAIT" || ($("strict-ml").checked&&r.engine!=="gpt"&&!r.signal_eligible))continue;
     const remaining=r.entry_at-now();
     const event=remaining>0&&remaining<=10?"soon":remaining<=0&&remaining>=-5?"entry":now()>=r.close_at&&now()<r.close_at+5?"close":null;
     const key=`${r.id}:${event}`;
@@ -321,7 +332,7 @@ function tick(){
   if(state.analyzing){const elapsed=Math.max(0,Math.floor(now()-state.analysisStarted));text("analysis-progress",`${state.engine==="gpt"?"Получаем прогноз GPT":"Рассчитываем ML-прогноз"} · ${elapsed} сек`);}
   const d=state.snapshot;if(!d)return;
   const forecastOld=now()-(d.forecast_data_as_of||d.data_as_of)>(d.max_data_age_seconds||state.session.max_data_age_seconds||90);
-  text("signal-updated",`${d.engine==="gpt"?d.model:({legacy_linear:"ML · линейная",expanded_linear:"ML · расширенная",boosting:"ML · бустинг"}[d.validation?.model_selection?.selected]||"ML Model")} · анализ ${clockTime(d.forecast_at||d.server_time)} · вход ${clockTime(d.entry_at)} · ${d.expiry} мин${state.analysisError?` · ${state.analysisError}`:""}${forecastOld?" · прогноз устарел":now()>=d.entry_at?" · время входа прошло":""}`);
+  text("signal-updated",`${d.engine==="gpt"?d.model:({legacy_linear:"ML · линейная",expanded_linear:"ML · расширенная",boosting:"ML · бустинг",extra_trees:"ML · деревья",regularized_linear:"ML · регуляризация",ensemble:"ML · ансамбль"}[d.validation?.model_selection?.selected]||"ML Model")} · анализ ${clockTime(d.forecast_at||d.server_time)} · вход ${clockTime(d.entry_at)} · ${d.expiry} мин${state.analysisError?` · ${state.analysisError}`:""}${forecastOld?" · прогноз устарел":now()>=d.entry_at?" · время входа прошло":""}`);
   const remaining=Math.ceil(d.entry_at-now());text("entry-countdown",remaining>0?`${remaining} сек`:"Вход завершён");
   if(d.direction!=="WAIT"&&remaining<=0)text("entry-countdown",d.close_at>now()?"Сделка в процессе":"Экспирация завершена");
   if(now()-d.data_as_of>(d.max_data_age_seconds||state.session.max_data_age_seconds||90)){text("data-metric","Устарели");$("live-dot").className="live-dot";text("chart-source",`${d.provider} · данные устарели`);text("data-detail","Последний анализ сохранён. Ожидаем свежие котировки от источника.");}
@@ -333,6 +344,7 @@ async function boot(){
     text("session-mode",state.session.preview?"Локальный просмотр":"Терминал владельцев");text("environment",(state.session.preview?"PREVIEW":"MINI APP")+" · v"+state.session.version);
     $("preview-notice").hidden=!state.session.preview;
     setupGPT();
+    try{$("strict-ml").checked=localStorage.getItem("strictML")==="true";}catch{}
     text("forex-status",state.session.forex_ready?"Ключ настроен · доступ проверяется при запросе":"Ожидает API-ключ");$("forex-status").classList.toggle("ready",state.session.forex_ready);
     text("telegram-status",state.session.bot_ready?(state.session.webapp_ready?"Бот и адрес настроены":"Бот подключён · нужен HTTPS-адрес"):(state.session.bot_status==="loading"?"Бот запускается в фоне":"Нужно подключить бота"));$("telegram-status").classList.toggle("ready",state.session.bot_ready&&state.session.webapp_ready);
     if(!state.session.forex_ready){state.category="crypto";state.symbol="BTCUSDT";}
@@ -363,6 +375,7 @@ function setupGPT(){
   $("analysis-engine").value=state.engine;text("entry-timezone",`Время входа: ${state.session.timezone} · точность до минуты · в пределах 24 часов`);renderEngine();
 }
 function renderEngine(){
+  $("ml-controls").hidden=state.engine!=="ml";
   $("gpt-controls").hidden=state.engine!=="gpt";
   text("engine-badge",state.engine==="gpt"?"GPT":"ML MODEL");
   text("gpt-status",state.session?.gpt_ready?"API-ключ настроен":"Добавьте OPENAI_API_KEY в Railway Variables");

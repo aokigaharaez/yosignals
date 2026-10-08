@@ -16,7 +16,7 @@ class SignalScheduler:
     async def tick(self):
         watch = await self.db.watch()
         # A setting change is applied without waiting for the next minute.
-        bucket = (int(time.time()) // 60, watch["symbol"], watch["expiry"])
+        bucket = (int(time.time()) // 60, watch["symbol"], watch["expiry"], watch.get("strict", False))
         if not watch["enabled"]:
             self.last_bucket = None
             self.scan_error = None
@@ -25,7 +25,7 @@ class SignalScheduler:
             return
         self.last_bucket = bucket
         try:
-            await self.service.create(watch["symbol"], watch["expiry"])
+            await self.service.create(watch["symbol"], watch["expiry"], **({"strict": True} if watch.get("strict") else {}))
             self.scan_error = None
         except MarketError as exc:
             self.scan_error = exc.message

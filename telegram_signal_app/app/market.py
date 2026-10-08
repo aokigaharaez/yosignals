@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+import logging
 import time
 from datetime import datetime, timezone
 import httpx
@@ -16,8 +17,11 @@ class MarketError(Exception):
 
 
 class MarketData:
-    def __init__(self, settings: Settings, client: httpx.AsyncClient):
+    def __init__(self, settings: Settings, client: httpx.AsyncClient, history=None):
         self.settings, self.client = settings, client
+        self.history = history
+        self.backfills = {}
+        self.backfill_attempts = {}
         self.cache: dict[str, tuple[float, list[Candle]]] = {}
         self.cache_minute: dict[str, int] = {}
         self.errors: dict[str, tuple[float, MarketError]] = {}
@@ -43,9 +47,41 @@ class MarketData:
                 self.errors[symbol] = (time.monotonic(), exc)
                 raise
             self.cache[symbol] = (time.monotonic(), rows)
+            if self.history is not None:
+                await self.history.store_candles(symbol, rows, self.settings.model_history_limit)
+                rows = self.validate(await self.history.candle_history(symbol, self.settings.model_history_limit))
+                self.cache[symbol] = (time.monotonic(), rows)
+                if (INSTRUMENTS[symbol].category == "crypto" and len(rows) < self.settings.crypto_backfill_candles
+                        and time.monotonic()-self.backfill_attempts.get(symbol, -10000) > 600
+                        and (symbol not in self.backfills or self.backfills[symbol].done())):
+                    self.backfill_attempts[symbol] = time.monotonic()
+                    self.backfills[symbol] = asyncio.create_task(self._backfill(symbol, rows[0].time, len(rows)))
             self.cache_minute[symbol] = requested_minute
             self.errors.pop(symbol, None)
             return rows
+
+    async def _backfill(self, symbol, oldest, count):
+        """Bootstrap crypto history without delaying the first live quote."""
+        try:
+            while count < self.settings.crypto_backfill_candles:
+                response = await self.client.get("https://data-api.binance.vision/api/v3/klines", params={
+                    "symbol": INSTRUMENTS[symbol].provider_symbol, "interval": "1m",
+                    "limit": min(1000, self.settings.crypto_backfill_candles-count), "endTime": oldest*1000-1})
+                self._check_http(response)
+                rows = self.validate([Candle(int(r[0])//1000, *map(float, r[1:5])) for r in response.json()])
+                if rows[-1].time >= oldest:
+                    raise MarketError("invalid_data", "Источник вернул неверный участок истории.")
+                await self.history.store_candles(symbol, rows, self.settings.model_history_limit)
+                oldest, count = rows[0].time, count+len(rows)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logging.getLogger(__name__).warning("Historical backfill unavailable for %s; live quotes remain enabled", symbol)
+
+    async def close(self):
+        for task in self.backfills.values():
+            task.cancel()
+        await asyncio.gather(*self.backfills.values(), return_exceptions=True)
 
     async def _fetch(self, symbol: str) -> list[Candle]:
         instrument = INSTRUMENTS[symbol]

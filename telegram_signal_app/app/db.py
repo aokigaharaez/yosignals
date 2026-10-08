@@ -17,6 +17,11 @@ class Database:
             names = {row[0] for row in existing}
             await db.executescript("""
                 BEGIN IMMEDIATE;
+                CREATE TABLE IF NOT EXISTS market_candles (
+                    symbol TEXT NOT NULL, time INTEGER NOT NULL,
+                    open REAL NOT NULL, high REAL NOT NULL, low REAL NOT NULL, close REAL NOT NULL,
+                    PRIMARY KEY(symbol, time)
+                );
                 CREATE TABLE IF NOT EXISTS analysis_runs_v2 (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     symbol TEXT NOT NULL, expiry INTEGER NOT NULL, candle_time INTEGER NOT NULL,
@@ -47,6 +52,10 @@ class Database:
                 await db.execute("INSERT INTO analysis_runs_v2 SELECT * FROM analysis_runs")
             await db.commit()
 
+            watch_columns = await (await db.execute("PRAGMA table_info(watch_settings)")).fetchall()
+            if "strict" not in {row[1] for row in watch_columns}:
+                await db.execute("ALTER TABLE watch_settings ADD COLUMN strict INTEGER NOT NULL DEFAULT 0")
+                await db.commit()
             columns = await (await db.execute("PRAGMA table_info(analysis_runs_v2)")).fetchall()
             if "engine_key" not in {row[1] for row in columns}:
                 await db.executescript("""
@@ -64,6 +73,22 @@ class Database:
                     DROP TABLE analysis_runs_engine_migration;
                     COMMIT;
                 """)
+
+    async def store_candles(self, symbol, candles, limit=20000):
+        async with aiosqlite.connect(self.path) as db:
+            await db.executemany("INSERT OR IGNORE INTO market_candles VALUES(?,?,?,?,?,?)",
+                [(symbol, c.time, c.open, c.high, c.low, c.close) for c in candles])
+            await db.execute("DELETE FROM market_candles WHERE symbol=? AND time < "
+                "(SELECT MIN(time) FROM (SELECT time FROM market_candles WHERE symbol=? ORDER BY time DESC LIMIT ?))",
+                (symbol, symbol, limit))
+            await db.commit()
+
+    async def candle_history(self, symbol, limit=20000):
+        from .models import Candle
+        async with aiosqlite.connect(self.path) as db:
+            rows = await (await db.execute("SELECT time,open,high,low,close FROM market_candles "
+                "WHERE symbol=? ORDER BY time DESC LIMIT ?", (symbol, limit))).fetchall()
+        return [Candle(*row) for row in reversed(rows)]
 
     async def save(self, payload: dict) -> dict:
         engine_key = payload.get("model", "gpt") if payload.get("engine") == "gpt" else "ml"
@@ -134,9 +159,9 @@ class Database:
 
     async def watch(self) -> dict:
         async with aiosqlite.connect(self.path) as db:
-            cursor = await db.execute("SELECT enabled,symbol,expiry FROM watch_settings WHERE id=1")
+            cursor = await db.execute("SELECT enabled,symbol,expiry,strict FROM watch_settings WHERE id=1")
             row = await cursor.fetchone()
-        return {"enabled": bool(row[0]), "symbol": row[1], "expiry": row[2]}
+        return {"enabled": bool(row[0]), "symbol": row[1], "expiry": row[2], "strict": bool(row[3])}
 
     async def is_owner(self, telegram_id: int) -> bool:
         async with aiosqlite.connect(self.path) as db:
@@ -159,10 +184,10 @@ class Database:
             await db.commit()
             return cursor.rowcount == 1
 
-    async def set_watch(self, enabled: bool, symbol: str, expiry: int) -> dict:
+    async def set_watch(self, enabled: bool, symbol: str, expiry: int, strict: bool = False) -> dict:
         async with aiosqlite.connect(self.path) as db:
-            await db.execute("UPDATE watch_settings SET enabled=?,symbol=?,expiry=? WHERE id=1",
-                             (int(enabled), symbol, expiry))
+            await db.execute("UPDATE watch_settings SET enabled=?,symbol=?,expiry=?,strict=? WHERE id=1",
+                             (int(enabled), symbol, expiry, int(strict)))
             await db.commit()
         return await self.watch()
 

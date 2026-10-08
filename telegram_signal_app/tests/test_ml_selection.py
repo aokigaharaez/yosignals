@@ -12,7 +12,7 @@ def test_nonlinear_candidate_learns_interactions_linear_model_cannot():
     indices = np.arange(len(x))
     train = np.arange(1600)
     model, width, selection = fit_selected_model(x, indices, targets, train, 4)
-    assert selection["selected"] == "boosting"
+    assert selection["selected"] in {"boosting", "extra_trees", "ensemble"}
     assert selection["folds"] == 2
     baseline = LogisticRegression(C=.2, max_iter=400).fit(x[train, :10], targets[train])
     baseline_accuracy = np.mean(baseline.predict(x[1800:, :10]) == targets[1800:])

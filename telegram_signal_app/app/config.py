@@ -27,6 +27,12 @@ class Settings:
     forex_max_data_age_seconds: int = 180
     model_min_score: float = .60
     model_min_validation: float = .54
+    model_target_win_rate: float = .80
+    model_min_calibration_samples: int = 100
+    model_min_test_signals: int = 50
+    model_retrain_seconds: int = 600
+    model_history_limit: int = 20000
+    crypto_backfill_candles: int = 10000
     auth_max_age_seconds: int = 3600
 
     @property
@@ -71,6 +77,14 @@ def load_settings() -> Settings:
         raise ValueError("WEBAPP_URL must be a public HTTPS URL")
     if not .5 < settings.model_min_score < 1 or not .5 <= settings.model_min_validation < 1:
         raise ValueError("Invalid model thresholds")
+    if not .55 <= settings.model_target_win_rate < 1:
+        raise ValueError("MODEL_TARGET_WIN_RATE must be between .55 and 1 (exclusive)")
+    if not 50 <= settings.model_min_calibration_samples <= 1000 or not 30 <= settings.model_min_test_signals <= 1000:
+        raise ValueError("Invalid ML validation sample limits")
+    if not 60 <= settings.model_retrain_seconds <= 3600 or not 1500 <= settings.model_history_limit <= 50000:
+        raise ValueError("Invalid ML training settings")
+    if not 1500 <= settings.crypto_backfill_candles <= settings.model_history_limit:
+        raise ValueError("Invalid crypto backfill limit")
     if not 1 <= settings.market_cache_seconds <= 120 or not 30 <= settings.max_data_age_seconds <= 180:
         raise ValueError("Invalid market freshness settings")
     if not 60 <= settings.forex_max_data_age_seconds <= 300:

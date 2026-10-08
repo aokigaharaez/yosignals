@@ -39,6 +39,7 @@ class AnalysisRequest(BaseModel):
 
 
 class SignalRequest(AnalysisRequest):
+    strict: bool = False
     entry_at: int | None = Field(default=None, strict=True)
     engine: Literal["ml", "gpt"] = "ml"
     model: Literal["gpt-6.1-sol", "gpt-6-luna", "gpt-6-astra"] = "gpt-6.1-sol"
@@ -46,6 +47,7 @@ class SignalRequest(AnalysisRequest):
 
 class WatchRequest(AnalysisRequest):
     enabled: bool
+    strict: bool = False
 
 
 class GPTRequest(AnalysisRequest):
@@ -71,7 +73,7 @@ def create_app(settings: Settings) -> FastAPI:
         await db.init()
         # Use the OS trust roots (including Windows enterprise roots); keep TLS verification on.
         async with httpx.AsyncClient(timeout=15, follow_redirects=False, verify=ssl.create_default_context()) as client:
-            market = MarketData(settings, client)
+            market = MarketData(settings, client, history=db)
             service = SignalService(settings, market, db)
             app.state.service, app.state.db = service, db
             app.state.gpt = GPTReview(settings, client)
@@ -98,6 +100,7 @@ def create_app(settings: Settings) -> FastAPI:
             finally:
                 for task in tasks:
                     task.cancel()
+                await market.close()
                 for task in tasks:
                     with suppress(asyncio.CancelledError):
                         await task
@@ -168,7 +171,7 @@ def create_app(settings: Settings) -> FastAPI:
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "version": "3.0", "delivery": "miniapp"}
+        return {"status": "ok", "version": "4.0", "delivery": "miniapp"}
 
     @app.get("/api/session")
     async def session(request: Request):
@@ -178,8 +181,8 @@ def create_app(settings: Settings) -> FastAPI:
                 "server_time": int(time.time()), "bot_ready": app.state.bot_ready,
                 "bot_status": app.state.bot_status, "model_status": app.state.service.model_status,
                 "forex_ready": bool(settings.twelve_data_api_key), "webapp_ready": bool(settings.webapp_url),
-                "min_score": settings.model_min_score * 100, "max_data_age_seconds": settings.max_data_age_seconds,
-                "delivery": "miniapp", "version": "3.0",
+                "model_retrain_seconds": settings.model_retrain_seconds, "min_score": settings.model_min_score * 100, "max_data_age_seconds": settings.max_data_age_seconds,
+                "delivery": "miniapp", "version": "4.0",
                 "gpt_ready": bool(settings.openai_api_key),
                 "gpt_models": [{"id": k, "label": v} for k, v in MODELS.items()],
                 "instruments": [asdict(i) for i in INSTRUMENTS.values()], "expiries": EXPIRIES}
@@ -198,7 +201,8 @@ def create_app(settings: Settings) -> FastAPI:
             if not settings.openai_api_key:
                 raise GPTError("missing_openai_key", "Добавьте OPENAI_API_KEY в Railway Variables.")
             return await app.state.service.create_gpt(body.symbol, body.expiry, body.model, identity["id"], app.state.gpt, **({"entry_at": body.entry_at} if body.entry_at is not None else {}))
-        return await app.state.service.create(body.symbol, body.expiry, **({"entry_at": body.entry_at} if body.entry_at is not None else {}))
+        return await app.state.service.create(body.symbol, body.expiry,
+            **({"entry_at": body.entry_at} if body.entry_at is not None else {}), **({"strict": True} if body.strict else {}))
 
     @app.post("/api/gpt/review")
     async def gpt_review(request: Request, body: GPTRequest):
@@ -237,7 +241,7 @@ def create_app(settings: Settings) -> FastAPI:
             if not snapshot["fresh"]:
                 raise HTTPException(409, "Нет свежих данных для автоанализа.")
         app.state.scheduler.scan_error = None
-        return await db.set_watch(body.enabled, body.symbol, body.expiry)
+        return await db.set_watch(body.enabled, body.symbol, body.expiry, strict=body.strict)
 
     @app.get("/api/owners")
     async def owners(request: Request):

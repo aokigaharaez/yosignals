@@ -1,0 +1,368 @@
+[
+  {
+    "symbol": "BTCUSDT",
+    "expiry": 1,
+    "candles": 10000,
+    "data_as_of": 1791451500,
+    "v3_accuracy": 49.5,
+    "v4_accuracy": 47.4,
+    "v4_probability": {
+      "value": 47.7,
+      "method": "historical_bin",
+      "samples": 985,
+      "wins": 470,
+      "interval": [
+        44.6,
+        50.8
+      ],
+      "note": "Калибровка по 985 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+    },
+    "v4_validation": {
+      "samples": 988,
+      "training_samples": 5373,
+      "calibration_samples": 987,
+      "accuracy": 47.4,
+      "baseline": 49.3,
+      "selected_samples": 2,
+      "selected_accuracy": 0.0,
+      "brier_score": 0.2495,
+      "model_selection": {
+        "selected": "boosting",
+        "folds": 2,
+        "log_loss": {
+          "legacy_linear": 0.6988,
+          "expanded_linear": 0.8236,
+          "regularized_linear": 0.7907,
+          "boosting": 0.6906,
+          "extra_trees": 0.6937,
+          "ensemble": 0.694
+        },
+        "method": "purged_expanding_training_only"
+      },
+      "feature_count": 40,
+      "selective": {
+        "target": 80.0,
+        "threshold": null,
+        "samples": 0,
+        "wins": 0,
+        "accuracy": null,
+        "interval": null,
+        "coverage": 0.0,
+        "recent_accuracy": null,
+        "passed": false,
+        "method": "calibration_threshold_untouched_test"
+      },
+      "training_cutoff": 1791214260,
+      "evaluated_until": 1791451440,
+      "method": "train_calibration_test_purged_nonoverlapping"
+    },
+    "signal_eligible": false,
+    "train_seconds": 9.699,
+    "cached_seconds": 0.033
+  },
+  {
+    "symbol": "BTCUSDT",
+    "expiry": 3,
+    "candles": 10000,
+    "data_as_of": 1791451500,
+    "v3_accuracy": 50.1,
+    "v4_accuracy": 49.8,
+    "v4_probability": {
+      "value": 47.3,
+      "method": "historical_bin",
+      "samples": 493,
+      "wins": 233,
+      "interval": [
+        42.9,
+        51.7
+      ],
+      "note": "Калибровка по 493 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+    },
+    "v4_validation": {
+      "samples": 494,
+      "training_samples": 5760,
+      "calibration_samples": 493,
+      "accuracy": 49.8,
+      "baseline": 47.4,
+      "selected_samples": 0,
+      "selected_accuracy": null,
+      "brier_score": 0.2506,
+      "model_selection": {
+        "selected": "legacy_linear",
+        "folds": 2,
+        "log_loss": {
+          "legacy_linear": 0.6943,
+          "expanded_linear": 0.9388,
+          "regularized_linear": 0.8446,
+          "boosting": 0.698,
+          "extra_trees": 0.6917,
+          "ensemble": 0.6929
+        },
+        "method": "purged_expanding_training_only"
+      },
+      "feature_count": 10,
+      "selective": {
+        "target": 80.0,
+        "threshold": null,
+        "samples": 0,
+        "wins": 0,
+        "accuracy": null,
+        "interval": null,
+        "coverage": 0.0,
+        "recent_accuracy": null,
+        "passed": false,
+        "method": "calibration_threshold_untouched_test"
+      },
+      "training_cutoff": 1791214200,
+      "evaluated_until": 1791451320,
+      "method": "train_calibration_test_purged_nonoverlapping"
+    },
+    "signal_eligible": false,
+    "train_seconds": 9.704,
+    "cached_seconds": 0.03
+  },
+  {
+    "symbol": "BTCUSDT",
+    "expiry": 5,
+    "candles": 10000,
+    "data_as_of": 1791451500,
+    "v3_accuracy": 51.7,
+    "v4_accuracy": 50.6,
+    "v4_probability": {
+      "value": 50.9,
+      "method": "historical_bin",
+      "samples": 320,
+      "wins": 163,
+      "interval": [
+        45.5,
+        56.4
+      ],
+      "note": "Калибровка по 320 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+    },
+    "v4_validation": {
+      "samples": 330,
+      "training_samples": 5850,
+      "calibration_samples": 329,
+      "accuracy": 50.6,
+      "baseline": 49.1,
+      "selected_samples": 15,
+      "selected_accuracy": 46.7,
+      "brier_score": 0.251,
+      "model_selection": {
+        "selected": "extra_trees",
+        "folds": 2,
+        "log_loss": {
+          "legacy_linear": 0.6975,
+          "expanded_linear": 0.9149,
+          "regularized_linear": 0.8669,
+          "boosting": 0.7015,
+          "extra_trees": 0.6914,
+          "ensemble": 0.6954
+        },
+        "method": "purged_expanding_training_only"
+      },
+      "feature_count": 40,
+      "selective": {
+        "target": 80.0,
+        "threshold": null,
+        "samples": 0,
+        "wins": 0,
+        "accuracy": null,
+        "interval": null,
+        "coverage": 0.0,
+        "recent_accuracy": null,
+        "passed": false,
+        "method": "calibration_threshold_untouched_test"
+      },
+      "training_cutoff": 1791214140,
+      "evaluated_until": 1791451500,
+      "method": "train_calibration_test_purged_nonoverlapping"
+    },
+    "signal_eligible": false,
+    "train_seconds": 10.747,
+    "cached_seconds": 0.041
+  },
+  {
+    "symbol": "ETHUSDT",
+    "expiry": 1,
+    "candles": 10000,
+    "data_as_of": 1791451500,
+    "v3_accuracy": 52.7,
+    "v4_accuracy": 51.3,
+    "v4_probability": {
+      "value": 51.0,
+      "method": "historical_bin",
+      "samples": 986,
+      "wins": 503,
+      "interval": [
+        47.9,
+        54.1
+      ],
+      "note": "Калибровка по 986 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+    },
+    "v4_validation": {
+      "samples": 988,
+      "training_samples": 5586,
+      "calibration_samples": 987,
+      "accuracy": 51.3,
+      "baseline": 47.1,
+      "selected_samples": 1,
+      "selected_accuracy": 0.0,
+      "brier_score": 0.2499,
+      "model_selection": {
+        "selected": "legacy_linear",
+        "folds": 2,
+        "log_loss": {
+          "legacy_linear": 0.6921,
+          "expanded_linear": 0.7005,
+          "regularized_linear": 0.6997,
+          "boosting": 0.6945,
+          "extra_trees": 0.6936,
+          "ensemble": 0.6948
+        },
+        "method": "purged_expanding_training_only"
+      },
+      "feature_count": 10,
+      "selective": {
+        "target": 80.0,
+        "threshold": null,
+        "samples": 0,
+        "wins": 0,
+        "accuracy": null,
+        "interval": null,
+        "coverage": 0.0,
+        "recent_accuracy": null,
+        "passed": false,
+        "method": "calibration_threshold_untouched_test"
+      },
+      "training_cutoff": 1791214260,
+      "evaluated_until": 1791451440,
+      "method": "train_calibration_test_purged_nonoverlapping"
+    },
+    "signal_eligible": false,
+    "train_seconds": 9.315,
+    "cached_seconds": 0.03
+  },
+  {
+    "symbol": "ETHUSDT",
+    "expiry": 3,
+    "candles": 10000,
+    "data_as_of": 1791451500,
+    "v3_accuracy": 51.9,
+    "v4_accuracy": 49.8,
+    "v4_probability": {
+      "value": 53.7,
+      "method": "historical_bin",
+      "samples": 493,
+      "wins": 265,
+      "interval": [
+        49.3,
+        58.1
+      ],
+      "note": "Калибровка по 493 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+    },
+    "v4_validation": {
+      "samples": 494,
+      "training_samples": 5851,
+      "calibration_samples": 493,
+      "accuracy": 49.8,
+      "baseline": 48.8,
+      "selected_samples": 0,
+      "selected_accuracy": null,
+      "brier_score": 0.2515,
+      "model_selection": {
+        "selected": "legacy_linear",
+        "folds": 2,
+        "log_loss": {
+          "legacy_linear": 0.6911,
+          "expanded_linear": 0.6977,
+          "regularized_linear": 0.6967,
+          "boosting": 0.6964,
+          "extra_trees": 0.691,
+          "ensemble": 0.6928
+        },
+        "method": "purged_expanding_training_only"
+      },
+      "feature_count": 10,
+      "selective": {
+        "target": 80.0,
+        "threshold": null,
+        "samples": 0,
+        "wins": 0,
+        "accuracy": null,
+        "interval": null,
+        "coverage": 0.0,
+        "recent_accuracy": null,
+        "passed": false,
+        "method": "calibration_threshold_untouched_test"
+      },
+      "training_cutoff": 1791214200,
+      "evaluated_until": 1791451320,
+      "method": "train_calibration_test_purged_nonoverlapping"
+    },
+    "signal_eligible": false,
+    "train_seconds": 9.301,
+    "cached_seconds": 0.031
+  },
+  {
+    "symbol": "ETHUSDT",
+    "expiry": 5,
+    "candles": 10000,
+    "data_as_of": 1791451500,
+    "v3_accuracy": 46.8,
+    "v4_accuracy": 48.8,
+    "v4_probability": {
+      "value": 48.0,
+      "method": "historical_bin",
+      "samples": 242,
+      "wins": 116,
+      "interval": [
+        41.7,
+        54.2
+      ],
+      "note": "Калибровка по 242 похожим прогнозам на отдельном участке истории; ничьи не считаются выигрышем."
+    },
+    "v4_validation": {
+      "samples": 330,
+      "training_samples": 5896,
+      "calibration_samples": 329,
+      "accuracy": 48.8,
+      "baseline": 47.6,
+      "selected_samples": 41,
+      "selected_accuracy": 48.8,
+      "brier_score": 0.2514,
+      "model_selection": {
+        "selected": "boosting",
+        "folds": 2,
+        "log_loss": {
+          "legacy_linear": 0.7026,
+          "expanded_linear": 0.6963,
+          "regularized_linear": 0.6945,
+          "boosting": 0.6894,
+          "extra_trees": 0.689,
+          "ensemble": 0.6887
+        },
+        "method": "purged_expanding_training_only"
+      },
+      "feature_count": 40,
+      "selective": {
+        "target": 80.0,
+        "threshold": null,
+        "samples": 0,
+        "wins": 0,
+        "accuracy": null,
+        "interval": null,
+        "coverage": 0.0,
+        "recent_accuracy": null,
+        "passed": false,
+        "method": "calibration_threshold_untouched_test"
+      },
+      "training_cutoff": 1791214140,
+      "evaluated_until": 1791451500,
+      "method": "train_calibration_test_purged_nonoverlapping"
+    },
+    "signal_eligible": false,
+    "train_seconds": 9.312,
+    "cached_seconds": 0.046
+  }
+]
