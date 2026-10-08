@@ -43,7 +43,7 @@ class SignalService:
         freshness_limit = (self.settings.forex_max_data_age_seconds if INSTRUMENTS[symbol].category == "forex"
                            else self.settings.max_data_age_seconds)
         result = {"direction": "WAIT", "score": None, "probability": None, "quality": "unavailable",
-                  "model": "Logistic regression · v2", "validation": None, "indicators": {},
+                  "model": "Adaptive ML · v3", "validation": None, "indicators": {},
                   "reasons": ["Модель загружается. Анализ появится после подготовки библиотек."
                               if self.model_status == "loading" else "Библиотеки модели недоступны. Проверьте зависимости сервера."],
                   "model_ready": False}

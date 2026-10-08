@@ -113,7 +113,7 @@ async function loadMarket(reset=false) {
 function renderSnapshot() {
   const d=state.snapshot;if(!d)return;
   $("chart-empty").hidden=true;
-  text("signal-updated",`${d.engine==="gpt"?d.model:"ML Model"} · анализ ${clockTime(d.forecast_at||d.server_time)} · вход ${clockTime(d.entry_at)} · экспирация ${d.expiry} мин`);
+  text("signal-updated",`${d.engine==="gpt"?d.model:({legacy_linear:"ML · линейная",expanded_linear:"ML · расширенная",boosting:"ML · бустинг"}[d.validation?.model_selection?.selected]||"ML Model")} · анализ ${clockTime(d.forecast_at||d.server_time)} · вход ${clockTime(d.entry_at)} · экспирация ${d.expiry} мин`);
   text("asset-price",price(d.price));text("asset-change",`${d.change_percent>=0?"+":""}${d.change_percent.toFixed(3)}% за 60 мин`);
   $("asset-change").className=d.change_percent>=0?"positive":"negative";
   text("data-metric",!d.fresh?"Устарели":d.delayed?"Задержка источника":"Актуальны");text("data-detail",`${d.sample_count} свечей · возраст ${Math.round(now()-d.data_as_of)} сек · ${clockTime(d.data_as_of)}`);
@@ -321,7 +321,7 @@ function tick(){
   if(state.analyzing){const elapsed=Math.max(0,Math.floor(now()-state.analysisStarted));text("analysis-progress",`${state.engine==="gpt"?"Получаем прогноз GPT":"Рассчитываем ML-прогноз"} · ${elapsed} сек`);}
   const d=state.snapshot;if(!d)return;
   const forecastOld=now()-(d.forecast_data_as_of||d.data_as_of)>(d.max_data_age_seconds||state.session.max_data_age_seconds||90);
-  text("signal-updated",`${d.engine==="gpt"?d.model:"ML Model"} · анализ ${clockTime(d.forecast_at||d.server_time)} · вход ${clockTime(d.entry_at)} · ${d.expiry} мин${state.analysisError?` · ${state.analysisError}`:""}${forecastOld?" · прогноз устарел":now()>=d.entry_at?" · время входа прошло":""}`);
+  text("signal-updated",`${d.engine==="gpt"?d.model:({legacy_linear:"ML · линейная",expanded_linear:"ML · расширенная",boosting:"ML · бустинг"}[d.validation?.model_selection?.selected]||"ML Model")} · анализ ${clockTime(d.forecast_at||d.server_time)} · вход ${clockTime(d.entry_at)} · ${d.expiry} мин${state.analysisError?` · ${state.analysisError}`:""}${forecastOld?" · прогноз устарел":now()>=d.entry_at?" · время входа прошло":""}`);
   const remaining=Math.ceil(d.entry_at-now());text("entry-countdown",remaining>0?`${remaining} сек`:"Вход завершён");
   if(d.direction!=="WAIT"&&remaining<=0)text("entry-countdown",d.close_at>now()?"Сделка в процессе":"Экспирация завершена");
   if(now()-d.data_as_of>(d.max_data_age_seconds||state.session.max_data_age_seconds||90)){text("data-metric","Устарели");$("live-dot").className="live-dot";text("chart-source",`${d.provider} · данные устарели`);text("data-detail","Последний анализ сохранён. Ожидаем свежие котировки от источника.");}
