@@ -22,8 +22,11 @@ class MarketData:
         self.history = history
         self.backfills = {}
         self.backfill_attempts = {}
+        self.refreshes = {}
+        self.live = None
         self.cache: dict[str, tuple[float, list[Candle]]] = {}
         self.cache_minute: dict[str, int] = {}
+        self.late_retries = {}
         self.errors: dict[str, tuple[float, MarketError]] = {}
         self.locks = {symbol: asyncio.Lock() for symbol in INSTRUMENTS}
 
@@ -34,23 +37,25 @@ class MarketData:
             cached = self.cache.get(symbol)
             # Refresh on a new UTC minute instead of keeping the previous bar
             # for an arbitrary 60-second phase after the last user request.
-            if (cached and self.cache_minute.get(symbol) == int(time.time()) // 60
-                    and time.monotonic() - cached[0] < self.settings.market_cache_seconds):
+            if cached and not self._refresh_due(symbol):
                 return cached[1]
             error = self.errors.get(symbol)
             if error and time.monotonic() - error[0] < 60:
                 raise error[1]
             requested_minute = int(time.time()) // 60
+            if cached and self.cache_minute.get(symbol) == requested_minute:
+                self.late_retries[symbol] = requested_minute
             try:
-                rows = self.validate(await self._fetch(symbol))
+                incremental = (cached and self.history is not None and
+                               int(time.time()) - cached[1][-1].time < 5 * 60 and
+                               INSTRUMENTS[symbol].category == "forex")
+                rows = self.validate(await self._fetch(symbol, **({"outputsize": 10} if incremental else {})))
             except MarketError as exc:
                 self.errors[symbol] = (time.monotonic(), exc)
                 raise
-            self.cache[symbol] = (time.monotonic(), rows)
             if self.history is not None:
                 await self.history.store_candles(symbol, rows, self.settings.model_history_limit)
                 rows = self.validate(await self.history.candle_history(symbol, self.settings.model_history_limit))
-                self.cache[symbol] = (time.monotonic(), rows)
                 target = (self.settings.forex_backfill_candles if symbol == "EURUSD" else
                           self.settings.crypto_backfill_candles if INSTRUMENTS[symbol].category == "crypto" else 0)
                 if (len(rows) < target
@@ -58,9 +63,54 @@ class MarketData:
                         and (symbol not in self.backfills or self.backfills[symbol].done())):
                     self.backfill_attempts[symbol] = time.monotonic()
                     self.backfills[symbol] = asyncio.create_task(self._backfill(symbol, rows[0].time, len(rows)))
+            self.cache[symbol] = (time.monotonic(), rows)
             self.cache_minute[symbol] = requested_minute
             self.errors.pop(symbol, None)
             return rows
+
+    def live_snapshot(self, symbol):
+        """Read only RAM; refresh source data in the background without blocking the UI."""
+        if symbol not in INSTRUMENTS:
+            raise MarketError("unsupported", "Актив не поддерживается.")
+        if self.live:
+            self.live.touch(symbol)
+        task = self.refreshes.get(symbol)
+        cached = self.cache.get(symbol)
+        due = self._refresh_due(symbol)
+        error = self.errors.get(symbol)
+        if due and (not task or task.done()) and (not error or time.monotonic()-error[0] >= 60):
+            self.refreshes[symbol] = asyncio.create_task(self._refresh(symbol))
+        last = cached[1][-1] if cached else None
+        limit = (self.settings.forex_max_data_age_seconds if INSTRUMENTS[symbol].category == "forex"
+                 else self.settings.max_data_age_seconds)
+        age = max(0, int(time.time())-last.time-60) if last else None
+        quote = self.live.view(symbol) if self.live and INSTRUMENTS[symbol].category == "forex" else {"quote": None, "stream_status": "disabled"}
+        return {"symbol": symbol, "server_time": int(time.time()), "candle_time": last.time if last else None,
+                "data_as_of": last.time+60 if last else None, "data_age_seconds": age,
+                "fresh": age is not None and age <= limit, "delayed": age is not None and age > 90,
+                "max_data_age_seconds": limit, "candle_price": last.close if last else None,
+                "refreshing": bool(self.refreshes.get(symbol) and not self.refreshes[symbol].done()),
+                "error": {"code": error[1].code, "detail": error[1].message} if error else None, **quote}
+
+    def _refresh_due(self, symbol):
+        cached = self.cache.get(symbol)
+        minute = int(time.time()) // 60
+        if not cached or self.cache_minute.get(symbol) != minute:
+            return True
+        elapsed = time.monotonic() - cached[0]
+        # Some feeds publish the closed bar a few seconds after the UTC boundary.
+        # Permit one extra request, rather than waiting an entire additional minute.
+        late = cached[1][-1].time + 60 < minute * 60
+        return elapsed >= self.settings.market_cache_seconds or (
+            late and elapsed >= 15 and self.late_retries.get(symbol) != minute)
+
+    async def _refresh(self, symbol):
+        try:
+            await self.candles(symbol)
+        except MarketError:
+            pass  # Retain the previous cache with its original timestamp and report the error.
+        except Exception:
+            self.errors[symbol] = (time.monotonic(), MarketError("provider_error", "Не удалось обновить котировки."))
 
     async def _backfill(self, symbol, oldest, count):
         """Bootstrap real history without delaying the first live quote."""
@@ -86,9 +136,10 @@ class MarketData:
             logging.getLogger(__name__).warning("Historical backfill unavailable for %s; live quotes remain enabled", symbol)
 
     async def close(self):
-        for task in self.backfills.values():
+        tasks = [*self.backfills.values(), *self.refreshes.values()]
+        for task in tasks:
             task.cancel()
-        await asyncio.gather(*self.backfills.values(), return_exceptions=True)
+        await asyncio.gather(*tasks, return_exceptions=True)
 
     async def _fetch(self, symbol: str, end_at: int | None = None, outputsize: int | None = None) -> list[Candle]:
         instrument = INSTRUMENTS[symbol]

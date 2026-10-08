@@ -27,6 +27,7 @@ from .models import INSTRUMENTS, EXPIRIES
 from .services import SignalService
 from .scheduler import SignalScheduler
 from .gpt import GPTReview, GPTError, MODELS
+from .live import LiveQuotes
 
 STATIC = Path(__file__).parent / "static"
 log = logging.getLogger(__name__)
@@ -74,6 +75,7 @@ def create_app(settings: Settings) -> FastAPI:
         # Use the OS trust roots (including Windows enterprise roots); keep TLS verification on.
         async with httpx.AsyncClient(timeout=15, follow_redirects=False, verify=ssl.create_default_context()) as client:
             market = MarketData(settings, client, history=db)
+            market.live = LiveQuotes(settings)
             service = SignalService(settings, market, db)
             app.state.service, app.state.db = service, db
             app.state.gpt = GPTReview(settings, client)
@@ -81,6 +83,7 @@ def create_app(settings: Settings) -> FastAPI:
             app.state.bot_status = "disabled" if not settings.bot_enabled else "not_configured"
             app.state.scheduler = SignalScheduler(settings, db, service)
             tasks = [asyncio.create_task(service.prepare_model()), asyncio.create_task(app.state.scheduler.run())]
+            tasks.append(asyncio.create_task(market.live.run()))
             if settings.bot_enabled and settings.bot_token and settings.bootstrap_owner_ids:
                 app.state.bot_status = "loading"
 
@@ -130,13 +133,13 @@ def create_app(settings: Settings) -> FastAPI:
             return {"id": 0, "first_name": "Локальный просмотр", "preview": True}
         raise HTTPException(401, "Откройте приложение через кнопку бота в Telegram.")
 
-    def rate_limit(identity: dict):
-        key = str(identity["id"])
+    def rate_limit(identity: dict, live: bool = False):
+        key = str(identity["id"]) + (":live" if live else "")
         queue = requests[key]
         now = time.monotonic()
         while queue and queue[0] < now - 60:
             queue.popleft()
-        if len(queue) >= 30:
+        if len(queue) >= (120 if live else 30):
             raise HTTPException(429, "Слишком много запросов. Подождите минуту.")
         queue.append(now)
 
@@ -172,7 +175,7 @@ def create_app(settings: Settings) -> FastAPI:
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "version": "5.0", "delivery": "miniapp"}
+        return {"status": "ok", "version": "5.1", "delivery": "miniapp"}
 
     @app.get("/api/session")
     async def session(request: Request):
@@ -184,7 +187,7 @@ def create_app(settings: Settings) -> FastAPI:
                 "forex_ready": bool(settings.twelve_data_api_key), "webapp_ready": bool(settings.webapp_url),
                 "model_target_win_rate": settings.model_target_win_rate*100,
                 "model_retrain_seconds": settings.model_retrain_seconds, "min_score": settings.model_min_score * 100, "max_data_age_seconds": settings.max_data_age_seconds,
-                "delivery": "miniapp", "version": "5.0",
+                "delivery": "miniapp", "version": "5.1", "live_refresh_seconds": 1,
                 "gpt_ready": bool(settings.openai_api_key),
                 "gpt_models": [{"id": k, "label": v} for k, v in MODELS.items()],
                 "instruments": [asdict(i) for i in INSTRUMENTS.values()], "expiries": EXPIRIES}
@@ -194,6 +197,11 @@ def create_app(settings: Settings) -> FastAPI:
         identity = await user(request, preview=True)
         rate_limit(identity)
         return await app.state.service.snapshot(symbol, expiry, ml=engine == "ml", entry_at=entry_at)
+
+    @app.get("/api/live")
+    async def live_market(request: Request, symbol: str = "EURUSD"):
+        rate_limit(await user(request, preview=True), live=True)
+        return app.state.service.market.live_snapshot(symbol)
 
     @app.post("/api/analyses")
     async def create_analysis(request: Request, body: SignalRequest):

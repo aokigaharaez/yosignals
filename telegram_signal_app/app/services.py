@@ -12,7 +12,7 @@ from .db import Database
 from .market import MarketData, MarketError
 from .models import INSTRUMENTS, EXPIRIES
 from .timing import plan_entry, validate_entry
-from .technical import indicators
+from .technical import indicators, market_context
 
 
 class SignalService:
@@ -54,6 +54,7 @@ class SignalService:
                   "model_ready": False}
         if not ml:
             result.update(engine="gpt", model="GPT", indicators=indicators(candles),
+                          market_context=market_context(candles),
                           reasons=["GPT-прогноз ещё не запрошен. Нажмите «Получить сигнал»."], forecast_pending=True)
         async with (self.lock if ml else nullcontext()):
             for _ in range(3):
@@ -141,9 +142,12 @@ class SignalService:
         validate_entry(entry_at, now=int(time.time()))
         snapshot = await self.snapshot(symbol, expiry, ml=False, **({"entry_at": entry_at} if entry_at is not None else {}))
         # Reserve time for the API before the scheduled entry; never shift a completed forecast.
-        snapshot["entry_at"], _ = plan_entry(snapshot["data_as_of"], entry_at, reserve=90, now=int(time.time()))
+        snapshot["entry_at"], _ = plan_entry(snapshot["data_as_of"], entry_at, reserve=35, now=int(time.time()))
         snapshot["close_at"] = snapshot["entry_at"] + expiry * 60
         snapshot["entry_delay"] = (snapshot["entry_at"] - snapshot["data_as_of"]) // 60
+        if getattr(self.market, "live", None):
+            self.market.live.touch(symbol)
+            snapshot["live_market"] = self.market.live.view(symbol)
         review = await gpt.review(snapshot, model, user_id, signal=True)
         now = int(time.time())
         prediction = review["prediction"]

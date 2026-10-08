@@ -20,7 +20,7 @@ function toast(message) { text("toast",message); $("toast").hidden=false; clearT
 async function api(path, options={}) {
   const initData = telegramInitData();
   const headers={...(options.body ? {"Content-Type":"application/json"} : {}), ...(initData ? {Authorization:`tma ${initData}`} : {})};
-  const controller=new AbortController(); const timeout=setTimeout(()=>controller.abort(),(path==="/api/gpt/review"||path==="/api/analyses")?95000:25000);
+  const controller=new AbortController(); const timeout=setTimeout(()=>controller.abort(),path.startsWith("/api/live?")?3500:(path==="/api/gpt/review"||path==="/api/analyses")?95000:25000);
   try {
     const response=await fetch(path,{...options,headers,signal:controller.signal});
     const contentType=response.headers.get("content-type")||"";
@@ -83,6 +83,7 @@ function resetMetrics() {
 }
 async function loadMarket(reset=false) {
   if(!state.session) return;
+  state.lastMarketAttempt=now();
 
   const seq=reset||!state.analyzing?++state.sequence:state.sequence; state.marketSequence=seq;state.loading=true;
   if(reset&&(!state.snapshot||state.snapshot.symbol!==state.symbol||state.snapshot.expiry!==state.expiry))resetMetrics();
@@ -99,6 +100,7 @@ async function loadMarket(reset=false) {
       state.snapshot={...previous,candles:data.candles,price:data.price,change_percent:data.change_percent,data_as_of:data.data_as_of,data_age_seconds:data.data_age_seconds,fresh:data.fresh,delayed:data.delayed,max_data_age_seconds:data.max_data_age_seconds,sample_count:data.sample_count,indicators:data.indicators};
     }else{state.snapshot=data;state.snapshot.forecast_at=data.server_time;state.snapshot.forecast_data_as_of=data.data_as_of;state.snapshot.selection_entry_at=entry;}
     state.offset=data.server_time-Date.now()/1000;renderSnapshot();
+    state.lastMarketLoad=now();renderLiveQuote();
     if(state.engine==="gpt"&&$("live-analysis").checked&&!state.analyzing&&!expired)requestAnalysis(true);
   } catch(error) {
     if(seq!==state.sequence)return;
@@ -109,6 +111,39 @@ async function loadMarket(reset=false) {
     text("chart-empty-text",error.message);$("chart-retry").hidden=false;
     text("signal-direction","Нет данных");text("signal-summary","Для анализа нужны реальные свежие котировки. Проверьте подключение.");
   } finally { if(seq===state.marketSequence){state.loading=false;$("refresh-button").disabled=false;} }
+}
+function renderLiveQuote(){
+  const d=state.snapshot,live=state.live;if(!d||!live||live.symbol!==d.symbol)return;
+  const quote=live.quote,age=quote?Math.max(0,now()-quote.time):null;
+  const freshQuote=quote?.fresh&&age<=15;
+  text("asset-price",price(freshQuote?quote.price:d.price));
+  text("source-detail",freshQuote?`Поток цены · возраст ${Math.floor(age)} сек`:
+    state.category==="forex"?`Минутные свечи · ${live.stream_status==="unavailable"?"поток недоступен для ключа/соединения":live.stream_status==="disabled"?"поток отключён":"ожидаем свежий тик"}`:"Spot · минутные свечи");
+}
+async function pollLive(){
+  if(document.hidden||!state.session||state.page!=="overview"||state.liveLoading)return;
+  const symbol=state.symbol;
+  state.liveLoading=true;
+  try{
+    const live=await api(`/api/live?symbol=${encodeURIComponent(symbol)}`);
+    if(symbol!==state.symbol)return;
+    state.live=live;state.offset=live.server_time-Date.now()/1000;
+    const d=state.snapshot;
+    if(d&&d.symbol===symbol&&live.candle_time===d.candle_time){
+      d.fresh=live.fresh;d.delayed=live.delayed;d.data_age_seconds=live.data_age_seconds;
+      text("data-metric",live.error?"Ошибка источника":!live.fresh?"Устарели":live.delayed?"Задержка источника":"Актуальны");
+      text("data-detail",live.error?.detail||`${d.sample_count} свечей · возраст ${live.data_age_seconds} сек · ${clockTime(d.data_as_of)}`);
+    }
+    renderLiveQuote();
+    const pending=d?.training_pending||d?.status==="loading";
+    if(!state.loading&&now()-(state.lastMarketAttempt||0)>=3&&
+       ((!d&&now()-(state.lastMarketAttempt||0)>=10)||(d&&live.candle_time!==d.candle_time)||
+       (pending&&now()-(state.lastMarketLoad||0)>=10)))loadMarket();
+    if(state.engine==="gpt"&&$("live-analysis").checked&&!state.analyzing&&live.fresh&&
+       ($("entry-mode").value!=="custom"||selectedEntry(false)>now()+35))requestAnalysis(true);
+  }catch(error){
+    if(symbol===state.symbol){text("data-metric","Нет связи");text("data-detail",error.message);}
+  }finally{state.liveLoading=false;}
 }
 function renderSnapshot() {
   let d=state.snapshot;if(!d)return;
@@ -130,7 +165,7 @@ function renderSnapshot() {
   text("signal-action",{CALL:"ВВЕРХ ↑",PUT:"ВНИЗ ↓",WAIT:d.status==="filtered"?"НЕТ ПОДТВЕРЖДЁННОГО СИГНАЛА":state.analysisError?(state.engine==="gpt"?"ОШИБКА GPT":"ОШИБКА ML"):d.forecast_state==="stale_data"?"ДАННЫЕ УСТАРЕЛИ":d.forecast_state==="expired_entry"?"ВРЕМЯ ВХОДА ПРОШЛО":waiting?(state.analyzing?"ПОЛУЧАЕМ ПРОГНОЗ GPT":state.session?.gpt_ready?"ЗАПРОСИТЕ GPT-ПРОГНОЗ":"НУЖЕН OPENAI API-КЛЮЧ"):d.status==="loading"?"Подготовка модели":"НЕТ НАПРАВЛЕНИЯ"}[d.direction]);
   text("signal-direction",labels[d.direction]);text("signal-symbol",{WAIT:"∿",CALL:"↗",PUT:"↘"}[d.direction]);
   $("signal-state").className=`signal-state ${d.direction.toLowerCase()}`;
-  text("signal-summary",state.analysisError||(d.status==="filtered"?`Предварительное направление: ${d.raw_direction||"—"}. Целевая точность на независимой истории не подтверждена для этого прогноза. `:"")+d.reasons.join(" "));$("signal-explanation").open=d.direction==="WAIT"&&(!waiting||!!state.analysisError);
+  text("signal-summary",state.analysisError||(d.status==="filtered"?`Предварительное направление: ${d.raw_direction||"—"}. Целевая точность на независимой истории не подтверждена для этого прогноза. `:"")+d.reasons.join(" "));$("signal-explanation").open=(d.engine==="gpt"&&!waiting)||(d.direction==="WAIT"&&(!waiting||!!state.analysisError));
   $("forecast-quality").hidden=d.direction==="WAIT"&&d.status!=="filtered";
   text("quality-badge",d.engine==="gpt"?"GPT · точность не проверена":d.quality==="qualified"?"Фильтры качества пройдены":"Слабый сигнал · высокий риск");
   $("quality-badge").className=`quality-badge ${d.quality||"weak"}`;
@@ -144,7 +179,7 @@ function renderSnapshot() {
   text("rsi-value",i.rsi==null?"—":i.rsi.toFixed(1));$("rsi-marker").style.left=`${i.rsi??50}%`;
   text("atr-value",price(i.atr));text("chart-source",`${d.provider} · ${d.fresh?"актуальные данные":"данные устарели"}`);
   $("live-dot").className=`live-dot ${d.fresh?"live":""}`;text("chart-update",`${clockTime(d.data_as_of)} · ${state.session.timezone}`);
-  drawChart();tick();
+  drawChart();tick();renderLiveQuote();
 }
 function drawChart() {
   const canvas=$("market-chart"),rect=canvas.getBoundingClientRect();if(!rect.width)return;
@@ -360,9 +395,9 @@ async function boot(){
   }
 }
 setInterval(tick,1000);
+setInterval(pollLive,1000);
 setInterval(async()=>{
   if(document.hidden||!state.session)return;
-  if(state.page==="overview"&&!state.loading)await loadMarket();
   if(!state.session.preview){try{state.watch=await api("/api/watch");renderWatch();}catch{}await loadHistory();}
 },15000);
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&state.session&&!state.loading){loadMarket();loadHistory();}});

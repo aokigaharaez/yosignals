@@ -21,6 +21,7 @@ class Settings:
     local_preview: bool = True
     bot_enabled: bool = True
     twelve_data_api_key: str = ""
+    twelve_data_stream_enabled: bool = True
     openai_api_key: str = ""
     market_cache_seconds: int = 60
     max_data_age_seconds: int = 90

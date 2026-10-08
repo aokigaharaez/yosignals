@@ -49,7 +49,13 @@ class GPTReview:
                 raise GPTError("gpt_rate_limit", "GPT-разбор доступен раз в минуту для каждого владельца.", 429)
             self.last_request[user_id] = now
             context = {k: v for k, v in snapshot.items() if k not in {"candles"}}
-            context["candles"] = snapshot.get("candles", [])[-30:]
+            context["candles"] = snapshot.get("candles", [])[-60 if signal else -30:]
+            if signal:
+                context["forecast_horizon"] = {
+                    "entry_at": snapshot.get("entry_at"), "close_at": snapshot.get("close_at"),
+                    "seconds_until_entry": max(0, snapshot.get("entry_at", 0) - int(time.time())),
+                    "expiry_minutes": snapshot.get("expiry"),
+                    "target": "Compare market price at close_at with price at entry_at, not with the last candle close."}
             extra = {}
             if signal:
                 for field in ("direction", "score", "probability", "quality", "validation", "reasons", "model", "model_ready", "status"):
@@ -65,9 +71,17 @@ class GPTReview:
                 "Ответ на русском в заданном JSON. Выбери направление CALL (вверх), PUT (вниз) "
                 "или WAIT (пропустить) для заданной экспирации и серверного времени входа. "
                 "На пригодных данных выбирай наиболее вероятное направление CALL или PUT. "
+                "Проверь timeframes 1min/5min/15min: направление тренда, импульс, RSI, ATR, "
+                "положение цены относительно support_20/resistance_20 и тела последней свечи. "
+                "Для короткой экспирации основной вес у 1min, старшие интервалы дают контекст. "
+                "Сопоставь сценарии продолжения и отката; не считай перекупленность автоматическим PUT. "
+                "Цель — изменение между entry_at и close_at. Учти задержку до входа: "
+                "далёкое время входа делает текущий импульс менее полезным. "
+                "live_market.quote — отдельный тик; используй его только если fresh=true. "
+                "Пропуски свечей и противоречия таймфреймов указывай в risks. "
                 "При слабых или противоречивых признаках отмечай низкую надёжность в risks. "
                 "WAIT используй при непригодных данных, без оснований для направления. "
-                "Summary: одна короткая фраза до 15 слов; risks: максимум два кратких риска. "
+                "Summary: до 35 слов с конкретными признаками выбранного направления; risks: максимум два кратких риска. "
                 "Не выдумывай новости, цены, точность или вероятность выигрыша. "
                 "Источник внешний, цены Pocket Option могут отличаться; OTC не поддерживается."
             )
